@@ -94,6 +94,9 @@ export interface Settings {
   whatsappTemplate: string;
   defaultIncrementPercent: number;
   autoApplyIncrement: boolean;
+  bankName?: string;
+  accountTitle?: string;
+  accountNumber?: string;
 }
 
 export interface DashboardStats {

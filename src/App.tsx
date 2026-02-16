@@ -7,6 +7,8 @@ import { Leases } from './pages/Leases';
 import { RentSheet } from './pages/RentSheet';
 import { Payments } from './pages/Payments';
 import { Ledger } from './pages/Ledger';
+import { Invoice } from './pages/Invoice';
+import { Import } from './pages/Import';
 import { WhatsApp } from './pages/WhatsApp';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
@@ -73,6 +75,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <Ledger />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoice"
+        element={
+          <ProtectedRoute>
+            <Invoice />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/import"
+        element={
+          <ProtectedRoute>
+            <Import />
           </ProtectedRoute>
         }
       />
