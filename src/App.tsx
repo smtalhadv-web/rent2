@@ -26,98 +26,18 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/" replace /> : <Login />}
-      />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/tenants"
-        element={
-          <ProtectedRoute>
-            <Tenants />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/leases"
-        element={
-          <ProtectedRoute>
-            <Leases />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/rent-sheet"
-        element={
-          <ProtectedRoute>
-            <RentSheet />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/payments"
-        element={
-          <ProtectedRoute>
-            <Payments />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/ledger"
-        element={
-          <ProtectedRoute>
-            <Ledger />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/invoice"
-        element={
-          <ProtectedRoute>
-            <Invoice />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/import"
-        element={
-          <ProtectedRoute>
-            <Import />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/whatsapp"
-        element={
-          <ProtectedRoute>
-            <WhatsApp />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/reports"
-        element={
-          <ProtectedRoute>
-            <Reports />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <Settings />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/tenants" element={<ProtectedRoute><Tenants /></ProtectedRoute>} />
+      <Route path="/leases" element={<ProtectedRoute><Leases /></ProtectedRoute>} />
+      <Route path="/rent-sheet" element={<ProtectedRoute><RentSheet /></ProtectedRoute>} />
+      <Route path="/payments" element={<ProtectedRoute><Payments /></ProtectedRoute>} />
+      <Route path="/ledger" element={<ProtectedRoute><Ledger /></ProtectedRoute>} />
+      <Route path="/invoice" element={<ProtectedRoute><Invoice /></ProtectedRoute>} />
+      <Route path="/import" element={<ProtectedRoute><Import /></ProtectedRoute>} />
+      <Route path="/whatsapp" element={<ProtectedRoute><WhatsApp /></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
