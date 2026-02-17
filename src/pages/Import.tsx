@@ -5,40 +5,40 @@ import { useApp } from '../context/AppContext';
 export function Import() {
   const { addTenant, addRentRecord } = useApp();
   const [inputData, setInputData] = useState('');
-  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [previewData, setPreviewData] = useState<Array<{name: string; premises: string; rent: number; outstanding: number; paid: number; balance: number; effectiveDate: string; iescoNo: string; depositAccount: string;}>>([]);
   const [importMonth, setImportMonth] = useState('2026-02');
   const [message, setMessage] = useState('');
 
-  const parseData = () => {
+  const parseData = function() {
     const lines = inputData.trim().split('\n');
     if (lines.length < 2) {
       setMessage('Please paste data with headers');
       return;
     }
 
-    const headers = lines[0].split('\t').map(h => h.trim().toLowerCase());
-    const data = [];
+    const headers = lines[0].split('\t').map(function(h) { return h.trim().toLowerCase(); });
+    const data: Array<{name: string; premises: string; rent: number; outstanding: number; paid: number; balance: number; effectiveDate: string; iescoNo: string; depositAccount: string;}> = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split('\t');
       if (values.length < 3) continue;
 
-      const row: any = {};
-      headers.forEach((header, index) => {
+      const row: Record<string, string> = {};
+      headers.forEach(function(header, index) {
         row[header] = values[index]?.trim() || '';
       });
 
-      // Skip vacated
-      if (row['tenant name']?.toLowerCase().includes('vacate')) continue;
-      if (!row['tenant name'] || row['tenant name'] === '') continue;
+      const tenantName = row['tenant name'] || '';
+      if (tenantName.toLowerCase().includes('vacate')) continue;
+      if (tenantName === '') continue;
 
       data.push({
-        name: row['tenant name'] || '',
+        name: tenantName,
         premises: row['premises'] || '',
-        rent: parseInt(row['rent']?.replace(/,/g, '') || '0'),
-        outstanding: parseInt(row['outstanding previous months']?.replace(/,/g, '') || '0'),
-        paid: parseInt(row['paid of current month']?.replace(/,/g, '') || '0'),
-        balance: parseInt(row['balance']?.replace(/,/g, '') || row['balance carry forward']?.replace(/,/g, '') || '0'),
+        rent: parseInt((row['rent'] || '0').replace(/,/g, '')),
+        outstanding: parseInt((row['outstanding previous months'] || '0').replace(/,/g, '')),
+        paid: parseInt((row['paid of current month'] || '0').replace(/,/g, '')),
+        balance: parseInt((row['balance'] || row['balance carry forward'] || '0').replace(/,/g, '')),
         effectiveDate: row['effective date'] || '',
         iescoNo: row['iesco no'] || '',
         depositAccount: row['depositd account no'] || '',
@@ -46,14 +46,14 @@ export function Import() {
     }
 
     setPreviewData(data);
-    setMessage(`Found ${data.length} records to import`);
+    setMessage('Found ' + data.length + ' records to import');
   };
 
-  const handleImport = () => {
+  const handleImport = function() {
     let imported = 0;
-    previewData.forEach(row => {
+    previewData.forEach(function(row) {
       if (row.name && row.premises) {
-        const tenantId = `T${Date.now()}-${imported}`;
+        const tenantId = 'T' + Date.now() + '-' + imported;
         
         addTenant({
           id: tenantId,
@@ -71,7 +71,7 @@ export function Import() {
         });
 
         addRentRecord({
-          id: `RR${Date.now()}-${imported}`,
+          id: 'RR' + Date.now() + '-' + imported,
           tenantId: tenantId,
           monthYear: importMonth,
           rent: row.rent,
@@ -85,21 +85,18 @@ export function Import() {
       }
     });
 
-    setMessage(`✅ Successfully imported ${imported} records!`);
+    setMessage('Successfully imported ' + imported + ' records!');
     setPreviewData([]);
     setInputData('');
   };
 
-  const sampleData = `Sr No\tTenant Name\tPremises\tEffective Date\tRent\tOutstanding previous Months\tPaid of current Month\tBalance\tDepositd Account No\tIesco No
-1\tZafar Mahmood\t1M\t01-Jul-23\t97437\t170183\t0\t267620\t172\t6855087
-2\tZahoor ul Hassan\t3M\t20-Sep-23\t53944\t71154\t0\t125098\t172\t4298250`;
+  const sampleData = 'Sr No\tTenant Name\tPremises\tEffective Date\tRent\tOutstanding previous Months\tPaid of current Month\tBalance\tDepositd Account No\tIesco No\n1\tZafar Mahmood\t1M\t01-Jul-23\t97437\t170183\t0\t267620\t172\t6855087\n2\tZahoor ul Hassan\t3M\t20-Sep-23\t53944\t71154\t0\t125098\t172\t4298250';
 
   return (
     <Layout>
       <div className="p-4 md:p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">📥 Import Rent Sheet Data</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">Import Rent Sheet Data</h1>
 
-        {/* Instructions */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <h3 className="font-bold text-blue-800 mb-2">How to Import:</h3>
           <ol className="list-decimal list-inside text-blue-700 space-y-1">
@@ -107,22 +104,20 @@ export function Import() {
             <li>Select all data including headers (Ctrl+A)</li>
             <li>Copy (Ctrl+C)</li>
             <li>Paste below (Ctrl+V)</li>
-            <li>Click "Preview" then "Import"</li>
+            <li>Click Preview then Import</li>
           </ol>
         </div>
 
-        {/* Month Selection */}
         <div className="bg-white rounded-lg shadow p-4 mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">Import for Month:</label>
           <input
             type="month"
             className="border rounded-lg px-3 py-2"
             value={importMonth}
-            onChange={(e) => setImportMonth(e.target.value)}
+            onChange={function(e) { setImportMonth(e.target.value); }}
           />
         </div>
 
-        {/* Input Area */}
         <div className="bg-white rounded-lg shadow p-4 mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Paste Excel Data Here:
@@ -132,23 +127,23 @@ export function Import() {
             rows={10}
             placeholder="Paste your Excel data here..."
             value={inputData}
-            onChange={(e) => setInputData(e.target.value)}
+            onChange={function(e) { setInputData(e.target.value); }}
           />
           <div className="flex gap-2 mt-3">
             <button
               onClick={parseData}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
             >
-              👁️ Preview
+              Preview
             </button>
             <button
-              onClick={() => setInputData(sampleData)}
+              onClick={function() { setInputData(sampleData); }}
               className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
             >
               Load Sample
             </button>
             <button
-              onClick={() => { setInputData(''); setPreviewData([]); setMessage(''); }}
+              onClick={function() { setInputData(''); setPreviewData([]); setMessage(''); }}
               className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
             >
               Clear
@@ -156,14 +151,12 @@ export function Import() {
           </div>
         </div>
 
-        {/* Message */}
         {message && (
-          <div className={`p-3 rounded-lg mb-4 ${message.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+          <div className={message.includes('Successfully') ? 'p-3 rounded-lg mb-4 bg-green-100 text-green-700' : 'p-3 rounded-lg mb-4 bg-yellow-100 text-yellow-700'}>
             {message}
           </div>
         )}
 
-        {/* Preview Table */}
         {previewData.length > 0 && (
           <div className="bg-white rounded-lg shadow p-4">
             <div className="flex justify-between items-center mb-4">
@@ -172,7 +165,7 @@ export function Import() {
                 onClick={handleImport}
                 className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700"
               >
-                ✅ Import Data
+                Import Data
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -188,16 +181,18 @@ export function Import() {
                   </tr>
                 </thead>
                 <tbody>
-                  {previewData.map((row, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-2">{row.name}</td>
-                      <td className="p-2">{row.premises}</td>
-                      <td className="p-2 text-right">{row.rent.toLocaleString()}</td>
-                      <td className="p-2 text-right">{row.outstanding.toLocaleString()}</td>
-                      <td className="p-2 text-right text-green-600">{row.paid.toLocaleString()}</td>
-                      <td className="p-2 text-right font-bold">{row.balance.toLocaleString()}</td>
-                    </tr>
-                  ))}
+                  {previewData.map(function(row, idx) {
+                    return (
+                      <tr key={idx} className="border-b">
+                        <td className="p-2">{row.name}</td>
+                        <td className="p-2">{row.premises}</td>
+                        <td className="p-2 text-right">{row.rent.toLocaleString()}</td>
+                        <td className="p-2 text-right">{row.outstanding.toLocaleString()}</td>
+                        <td className="p-2 text-right text-green-600">{row.paid.toLocaleString()}</td>
+                        <td className="p-2 text-right font-bold">{row.balance.toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -206,4 +201,4 @@ export function Import() {
       </div>
     </Layout>
   );
-}s
+}

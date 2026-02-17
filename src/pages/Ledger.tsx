@@ -6,41 +6,40 @@ export function Ledger() {
   const { tenants, rentRecords, payments } = useApp();
   const [selectedTenant, setSelectedTenant] = useState('');
 
-  const activeTenants = tenants.filter(t => t.status === 'active');
-  const tenant = tenants.find(t => t.id === selectedTenant);
+  const activeTenants = tenants.filter(function(t) { return t.status === 'active'; });
+  const tenant = tenants.find(function(t) { return t.id === selectedTenant; });
 
   const tenantRentRecords = rentRecords
-    .filter(r => r.tenantId === selectedTenant)
-    .sort((a, b) => a.monthYear.localeCompare(b.monthYear));
+    .filter(function(r) { return r.tenantId === selectedTenant; })
+    .sort(function(a, b) { return a.monthYear.localeCompare(b.monthYear); });
 
   const tenantPayments = payments
-    .filter(p => p.tenantId === selectedTenant)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .filter(function(p) { return p.tenantId === selectedTenant; })
+    .sort(function(a, b) { return new Date(a.date).getTime() - new Date(b.date).getTime(); });
 
-  const handlePrint = () => {
+  const handlePrint = function() {
     window.print();
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = function() {
     if (!tenant) return;
     let csv = 'Month,Rent,Outstanding,Paid,Balance\n';
-    tenantRentRecords.forEach(r => {
-      csv += `${r.monthYear},${r.rent},${r.outstanding},${r.paid},${r.balance}\n`;
+    tenantRentRecords.forEach(function(r) {
+      csv += r.monthYear + ',' + r.rent + ',' + r.outstanding + ',' + r.paid + ',' + r.balance + '\n';
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ledger-${tenant.name}.csv`;
+    a.download = 'ledger-' + tenant.name + '.csv';
     a.click();
   };
 
   return (
     <Layout>
       <div className="p-4 md:p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">📒 Tenant Ledger</h1>
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">Tenant Ledger</h1>
 
-        {/* Tenant Selection */}
         <div className="bg-white rounded-lg shadow p-4 mb-6">
           <div className="flex flex-wrap gap-4 items-end">
             <div className="flex-1 min-w-[200px]">
@@ -48,12 +47,12 @@ export function Ledger() {
               <select
                 className="w-full border rounded-lg px-3 py-2"
                 value={selectedTenant}
-                onChange={(e) => setSelectedTenant(e.target.value)}
+                onChange={function(e) { setSelectedTenant(e.target.value); }}
               >
                 <option value="">-- Select Tenant --</option>
-                {activeTenants.map(t => (
-                  <option key={t.id} value={t.id}>{t.name} - {t.premises}</option>
-                ))}
+                {activeTenants.map(function(t) {
+                  return <option key={t.id} value={t.id}>{t.name} - {t.premises}</option>;
+                })}
               </select>
             </div>
             {selectedTenant && (
@@ -62,30 +61,27 @@ export function Ledger() {
                   onClick={handlePrint}
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                 >
-                  🖨️ Print
+                  Print
                 </button>
                 <button
                   onClick={handleExportExcel}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
                 >
-                  📊 Export Excel
+                  Export Excel
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Ledger Content */}
-        {tenant && (
+        {tenant ? (
           <div className="bg-white rounded-lg shadow">
-            {/* Tenant Header */}
             <div className="p-4 border-b bg-gray-50">
               <h2 className="text-xl font-bold">{tenant.name}</h2>
               <p className="text-gray-600">Shop: {tenant.premises} | Phone: {tenant.phone}</p>
               <p className="text-gray-600">Monthly Rent: Rs {tenant.rent.toLocaleString()}</p>
             </div>
 
-            {/* Rent Records */}
             <div className="p-4">
               <h3 className="font-bold mb-3">Month-wise Statement</h3>
               <div className="overflow-x-auto">
@@ -100,18 +96,19 @@ export function Ledger() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tenantRentRecords.map(r => (
-                      <tr key={r.id} className="border-b">
-                        <td className="p-3 font-medium">{r.monthYear}</td>
-                        <td className="p-3 text-right">{r.rent.toLocaleString()}</td>
-                        <td className="p-3 text-right text-orange-600">{r.outstanding.toLocaleString()}</td>
-                        <td className="p-3 text-right text-green-600">{r.paid.toLocaleString()}</td>
-                        <td className={`p-3 text-right font-bold ${r.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {r.balance.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                    {tenantRentRecords.length === 0 && (
+                    {tenantRentRecords.length > 0 ? tenantRentRecords.map(function(r) {
+                      return (
+                        <tr key={r.id} className="border-b">
+                          <td className="p-3 font-medium">{r.monthYear}</td>
+                          <td className="p-3 text-right">{r.rent.toLocaleString()}</td>
+                          <td className="p-3 text-right text-orange-600">{r.outstanding.toLocaleString()}</td>
+                          <td className="p-3 text-right text-green-600">{r.paid.toLocaleString()}</td>
+                          <td className={r.balance > 0 ? 'p-3 text-right font-bold text-red-600' : 'p-3 text-right font-bold text-green-600'}>
+                            {r.balance.toLocaleString()}
+                          </td>
+                        </tr>
+                      );
+                    }) : (
                       <tr>
                         <td colSpan={5} className="p-4 text-center text-gray-500">No records found</td>
                       </tr>
@@ -121,7 +118,6 @@ export function Ledger() {
               </div>
             </div>
 
-            {/* Payments */}
             <div className="p-4 border-t">
               <h3 className="font-bold mb-3">Payment History</h3>
               <div className="overflow-x-auto">
@@ -135,15 +131,16 @@ export function Ledger() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tenantPayments.map(p => (
-                      <tr key={p.id} className="border-b">
-                        <td className="p-3">{new Date(p.date).toLocaleDateString()}</td>
-                        <td className="p-3 text-right text-green-600 font-bold">Rs {p.amount.toLocaleString()}</td>
-                        <td className="p-3">{p.method}</td>
-                        <td className="p-3">{p.transactionNo || '-'}</td>
-                      </tr>
-                    ))}
-                    {tenantPayments.length === 0 && (
+                    {tenantPayments.length > 0 ? tenantPayments.map(function(p) {
+                      return (
+                        <tr key={p.id} className="border-b">
+                          <td className="p-3">{new Date(p.date).toLocaleDateString()}</td>
+                          <td className="p-3 text-right text-green-600 font-bold">Rs {p.amount.toLocaleString()}</td>
+                          <td className="p-3">{p.method}</td>
+                          <td className="p-3">{p.transactionNo || '-'}</td>
+                        </tr>
+                      );
+                    }) : (
                       <tr>
                         <td colSpan={4} className="p-4 text-center text-gray-500">No payments found</td>
                       </tr>
@@ -153,9 +150,7 @@ export function Ledger() {
               </div>
             </div>
           </div>
-        )}
-
-        {!selectedTenant && (
+        ) : (
           <div className="bg-gray-50 rounded-lg p-8 text-center text-gray-500">
             <p className="text-4xl mb-4">📒</p>
             <p>Select a tenant to view their ledger</p>
