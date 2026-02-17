@@ -1,303 +1,246 @@
-import { useState, useMemo } from 'react';
-import { Calendar, Download, RefreshCw, Search } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import { useApp } from '../context/AppContext';
+import { useState } from 'react';
 import { Layout } from '../components/Layout';
+import { useApp } from '../context/AppContext';
 
 export function RentSheet() {
-  const { tenants, rentRecords, generateRentSheet } = useApp();
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'vacated'>('all');
+  const { tenants, rentRecords } = useApp();
+  const [selectedMonth, setSelectedMonth] = useState('2026-02');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredRecords = useMemo(() => {
-    return rentRecords
-      .filter((record) => record.monthYear === selectedMonth)
-      .map((record) => {
-        const tenant = tenants.find((t) => t.id === record.tenantId);
-        return { ...record, tenant };
-      })
-      .filter((record) => {
-        if (!record.tenant) return false;
-        const matchesStatus =
-          statusFilter === 'all' || record.tenant.status === statusFilter;
-        const matchesSearch =
-          record.tenant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          record.tenant.premises.toLowerCase().includes(searchTerm.toLowerCase());
-        return matchesStatus && matchesSearch;
-      })
-      .sort((a, b) => (a.tenant?.premises || '').localeCompare(b.tenant?.premises || ''));
-  }, [rentRecords, selectedMonth, tenants, statusFilter, searchTerm]);
-
-  const totals = useMemo(() => {
-    return filteredRecords.reduce(
-      (acc, record) => ({
-        rent: acc.rent + record.rent,
-        outstanding: acc.outstanding + record.outstandingPrevious,
-        paid: acc.paid + record.paid,
-        balance: acc.balance + record.balance,
-      }),
-      { rent: 0, outstanding: 0, paid: 0, balance: 0 }
-    );
-  }, [filteredRecords]);
-
-  const handleGenerateSheet = () => {
-    generateRentSheet(selectedMonth);
-  };
-
-  const handleExport = () => {
-    const headers = ['Tenant', 'Premises', 'Monthly Rent', 'Previous Outstanding', 'Paid', 'Balance', 'Carry Forward'];
-    const rows = filteredRecords.map((r) => [
-      r.tenant?.name || '',
-      r.tenant?.premises || '',
-      r.rent.toString(),
-      r.outstandingPrevious.toString(),
-      r.paid.toString(),
-      r.balance.toString(),
-      r.carryForward.toString(),
-    ]);
+  // Filter tenants based on status
+  var filteredTenants: typeof tenants = [];
+  for (var i = 0; i < tenants.length; i++) {
+    var t = tenants[i];
     
-    const csv = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `rent-sheet-${selectedMonth}.csv`;
-    a.click();
-  };
-
-  const getMonthOptions = () => {
-    const months = [];
-    const currentDate = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      months.push({
-        value: format(date, 'yyyy-MM'),
-        label: format(date, 'MMMM yyyy'),
-      });
+    // Filter by status
+    if (filterStatus === 'active' && t.status !== 'active') continue;
+    if (filterStatus === 'vacated' && t.status !== 'vacated') continue;
+    
+    // Filter by search
+    if (searchTerm) {
+      var search = searchTerm.toLowerCase();
+      var nameMatch = t.name && t.name.toLowerCase().indexOf(search) >= 0;
+      var premisesMatch = t.premises && t.premises.toLowerCase().indexOf(search) >= 0;
+      if (!nameMatch && !premisesMatch) continue;
     }
-    // Add next month
-    const nextMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    months.push({
-      value: format(nextMonth, 'yyyy-MM'),
-      label: format(nextMonth, 'MMMM yyyy'),
-    });
-    return months;
-  };
+    
+    filteredTenants.push(t);
+  }
+
+  // Get rent data for each tenant
+  function getRentData(tenantId: string) {
+    for (var j = 0; j < rentRecords.length; j++) {
+      if (rentRecords[j].tenantId === tenantId && rentRecords[j].monthYear === selectedMonth) {
+        return rentRecords[j];
+      }
+    }
+    return null;
+  }
+
+  // Calculate totals
+  var totalRent = 0;
+  var totalOutstanding = 0;
+  var totalPaid = 0;
+  var totalBalance = 0;
+
+  for (var k = 0; k < filteredTenants.length; k++) {
+    var tenant = filteredTenants[k];
+    var rentData = getRentData(tenant.id);
+    
+    var rent = tenant.rent || 0;
+    var outstanding = rentData ? (rentData.outstanding || 0) : 0;
+    var paid = rentData ? (rentData.paid || 0) : 0;
+    var balance = rentData ? (rentData.balance || 0) : rent;
+    
+    totalRent = totalRent + rent;
+    totalOutstanding = totalOutstanding + outstanding;
+    totalPaid = totalPaid + paid;
+    totalBalance = totalBalance + balance;
+  }
+
+  function handlePrint() {
+    window.print();
+  }
+
+  function handleExport() {
+    var csv = 'Sr No,Tenant Name,Premises,Monthly Rent,Outstanding,Paid,Balance\n';
+    
+    for (var m = 0; m < filteredTenants.length; m++) {
+      var t = filteredTenants[m];
+      var rd = getRentData(t.id);
+      
+      var rent = t.rent || 0;
+      var outstanding = rd ? (rd.outstanding || 0) : 0;
+      var paid = rd ? (rd.paid || 0) : 0;
+      var balance = rd ? (rd.balance || 0) : rent;
+      
+      csv += (m + 1) + ',';
+      csv += '"' + (t.name || '') + '",';
+      csv += '"' + (t.premises || '') + '",';
+      csv += rent + ',';
+      csv += outstanding + ',';
+      csv += paid + ',';
+      csv += balance + '\n';
+    }
+    
+    var blob = new Blob([csv], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'rent-sheet-' + selectedMonth + '.csv';
+    a.click();
+  }
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Monthly Rent Sheet</h1>
-            <p className="text-gray-500 mt-1">
-              {format(parseISO(`${selectedMonth}-01`), 'MMMM yyyy')} rent overview
-            </p>
-          </div>
+      <div className="p-4 md:p-6">
+        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Rent Sheet - {selectedMonth}</h1>
           <div className="flex gap-2">
             <button
-              onClick={handleGenerateSheet}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              onClick={handlePrint}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
             >
-              <RefreshCw className="w-5 h-5" />
-              Generate Sheet
+              🖨️ Print
             </button>
             <button
               onClick={handleExport}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
             >
-              <Download className="w-5 h-5" />
-              Export CSV
+              📊 Export
             </button>
           </div>
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <select
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+              <input
+                type="month"
+                className="w-full border rounded-lg px-3 py-2"
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 appearance-none bg-white"
+                onChange={function(e) { setSelectedMonth(e.target.value); }}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                className="w-full border rounded-lg px-3 py-2"
+                value={filterStatus}
+                onChange={function(e) { setFilterStatus(e.target.value); }}
               >
-                {getMonthOptions().map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                <option value="all">All Tenants</option>
+                <option value="active">Active Only</option>
+                <option value="vacated">Vacated Only</option>
               </select>
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'vacated')}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="all">All Tenants</option>
-              <option value="active">Active Only</option>
-              <option value="vacated">Vacated Only</option>
-            </select>
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
               <input
                 type="text"
-                placeholder="Search..."
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="Search tenant or shop..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                onChange={function(e) { setSearchTerm(e.target.value); }}
               />
             </div>
           </div>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">Total Rent</p>
-            <p className="text-2xl font-bold text-gray-900">Rs {totals.rent.toLocaleString()}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p className="text-blue-600 text-sm">Total Rent</p>
+            <p className="text-xl font-bold text-blue-800">Rs {totalRent.toLocaleString()}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">Previous Outstanding</p>
-            <p className="text-2xl font-bold text-amber-600">Rs {totals.outstanding.toLocaleString()}</p>
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <p className="text-orange-600 text-sm">Outstanding</p>
+            <p className="text-xl font-bold text-orange-800">Rs {totalOutstanding.toLocaleString()}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">Total Collected</p>
-            <p className="text-2xl font-bold text-green-600">Rs {totals.paid.toLocaleString()}</p>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <p className="text-green-600 text-sm">Total Paid</p>
+            <p className="text-xl font-bold text-green-800">Rs {totalPaid.toLocaleString()}</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500">Outstanding Balance</p>
-            <p className="text-2xl font-bold text-red-600">Rs {totals.balance.toLocaleString()}</p>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-red-600 text-sm">Total Balance</p>
+            <p className="text-xl font-bold text-red-800">Rs {totalBalance.toLocaleString()}</p>
           </div>
         </div>
 
         {/* Rent Sheet Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tenant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Premises
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Monthly Rent
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Previous Outstanding
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Paid
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Balance
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Carry Forward
-                  </th>
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="p-3 text-left">Sr#</th>
+                  <th className="p-3 text-left">Tenant Name</th>
+                  <th className="p-3 text-left">Premises</th>
+                  <th className="p-3 text-right">Monthly Rent</th>
+                  <th className="p-3 text-right">Outstanding</th>
+                  <th className="p-3 text-right">Paid</th>
+                  <th className="p-3 text-right">Balance</th>
+                  <th className="p-3 text-center">Status</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredRecords.map((record) => (
-                  <tr key={record.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                          <span className="text-indigo-600 font-medium text-sm">
-                            {record.tenant?.name.charAt(0)}
-                          </span>
-                        </div>
-                        <div className="ml-3">
-                          <div className="text-sm font-medium text-gray-900">
-                            {record.tenant?.name}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {record.tenant?.status === 'active' ? (
-                              <span className="text-green-600">Active</span>
-                            ) : (
-                              <span className="text-red-600">Vacated</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {record.tenant?.premises}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900">
-                      Rs {record.rent.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-amber-600">
-                      Rs {record.outstandingPrevious.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-green-600 font-medium">
-                      Rs {record.paid.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                      <span
-                        className={`font-medium ${
-                          record.balance > 0 ? 'text-red-600' : 'text-green-600'
-                        }`}
-                      >
-                        Rs {record.balance.toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right">
-                      <span
-                        className={`px-2 py-1 rounded font-medium ${
-                          record.carryForward > 0
-                            ? 'bg-red-100 text-red-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}
-                      >
-                        Rs {record.carryForward.toLocaleString()}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              {filteredRecords.length > 0 && (
-                <tfoot className="bg-gray-50">
+              <tbody>
+                {filteredTenants.length > 0 ? (
+                  filteredTenants.map(function(tenant, index) {
+                    var rentData = getRentData(tenant.id);
+                    
+                    var rent = tenant.rent || 0;
+                    var outstanding = rentData ? (rentData.outstanding || 0) : 0;
+                    var paid = rentData ? (rentData.paid || 0) : 0;
+                    var balance = rentData ? (rentData.balance || 0) : rent;
+                    
+                    var balanceColor = 'text-gray-800';
+                    if (balance > 0) balanceColor = 'text-red-600';
+                    if (balance < 0) balanceColor = 'text-green-600';
+                    
+                    return (
+                      <tr key={tenant.id} className="border-b hover:bg-gray-50">
+                        <td className="p-3">{index + 1}</td>
+                        <td className="p-3 font-medium">{tenant.name || 'N/A'}</td>
+                        <td className="p-3">{tenant.premises || 'N/A'}</td>
+                        <td className="p-3 text-right">{rent.toLocaleString()}</td>
+                        <td className="p-3 text-right text-orange-600">{outstanding.toLocaleString()}</td>
+                        <td className="p-3 text-right text-green-600">{paid.toLocaleString()}</td>
+                        <td className={'p-3 text-right font-bold ' + balanceColor}>
+                          {balance.toLocaleString()}
+                        </td>
+                        <td className="p-3 text-center">
+                          {tenant.status === 'active' ? (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">Active</span>
+                          ) : (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">Vacated</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
                   <tr>
-                    <td colSpan={2} className="px-6 py-4 text-sm font-bold text-gray-900">
-                      TOTAL
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-gray-900">
-                      Rs {totals.rent.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-amber-600">
-                      Rs {totals.outstanding.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-green-600">
-                      Rs {totals.paid.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-red-600">
-                      Rs {totals.balance.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-right font-bold text-red-600">
-                      Rs {totals.balance.toLocaleString()}
+                    <td colSpan={8} className="p-8 text-center text-gray-500">
+                      No tenants found
                     </td>
                   </tr>
-                </tfoot>
-              )}
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-100 font-bold">
+                  <td className="p-3" colSpan={3}>TOTAL</td>
+                  <td className="p-3 text-right">{totalRent.toLocaleString()}</td>
+                  <td className="p-3 text-right text-orange-600">{totalOutstanding.toLocaleString()}</td>
+                  <td className="p-3 text-right text-green-600">{totalPaid.toLocaleString()}</td>
+                  <td className="p-3 text-right text-red-600">{totalBalance.toLocaleString()}</td>
+                  <td className="p-3"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
-          {filteredRecords.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500 mb-4">No rent records for this month</p>
-              <button
-                onClick={handleGenerateSheet}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                <RefreshCw className="w-5 h-5" />
-                Generate Rent Sheet
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </Layout>
