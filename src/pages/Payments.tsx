@@ -1,511 +1,360 @@
 import { useState } from 'react';
-import { Plus, Search, Eye, X, CreditCard, Banknote, Smartphone, Receipt } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
-import { Payment, PaymentMethod } from '../types';
+import { useApp } from '../context/AppContext';
 
 export function Payments() {
-  const { tenants, payments, addPayment, rentRecords, user } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [methodFilter, setMethodFilter] = useState<PaymentMethod | 'all'>('all');
-  const [showModal, setShowModal] = useState(false);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [viewingPayment, setViewingPayment] = useState<Payment | null>(null);
-
+  const { tenants, payments, addPayment } = useApp();
+  const [showForm, setShowForm] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [lastPayment, setLastPayment] = useState<any>(null);
   const [formData, setFormData] = useState({
     tenantId: '',
-    monthYear: format(new Date(), 'yyyy-MM'),
-    amount: 0,
-    paymentDate: format(new Date(), 'yyyy-MM-dd'),
-    paymentMethod: 'cash' as PaymentMethod,
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    method: 'cash' as 'cash' | 'bank' | 'online',
     transactionNo: '',
     depositedAccount: '',
+    attachment: '',
+    attachmentName: '',
   });
 
-  const activeTenants = tenants.filter((t) => t.status === 'active');
+  const activeTenants = tenants.filter(function(t) { return t.status === 'active'; });
 
-  const filteredPayments = payments
-    .filter((payment) => {
-      const tenant = tenants.find((t) => t.id === payment.tenantId);
-      const matchesSearch =
-        tenant?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tenant?.premises.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payment.transactionNo.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesMethod = methodFilter === 'all' || payment.paymentMethod === methodFilter;
-      return matchesSearch && matchesMethod;
-    })
-    .sort((a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime());
-
-  const getTenantName = (tenantId: string) => {
-    return tenants.find((t) => t.id === tenantId)?.name || 'Unknown';
+  const handleFileChange = function(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = function() {
+        setFormData(function(prev) {
+          return { ...prev, attachment: reader.result as string, attachmentName: file.name };
+        });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const getTenantPremises = (tenantId: string) => {
-    return tenants.find((t) => t.id === tenantId)?.premises || '-';
-  };
-
-  const getTenantOutstanding = (tenantId: string, monthYear: string) => {
-    const record = rentRecords.find(
-      (r) => r.tenantId === tenantId && r.monthYear === monthYear
-    );
-    return record?.balance || 0;
-  };
-
-  const resetForm = () => {
+  const handleSubmit = function(e: React.FormEvent) {
+    e.preventDefault();
+    const tenant = tenants.find(function(t) { return t.id === formData.tenantId; });
+    const newPayment = {
+      id: 'P' + Date.now(),
+      tenantId: formData.tenantId,
+      amount: parseInt(formData.amount),
+      date: formData.date,
+      method: formData.method,
+      transactionNo: formData.transactionNo,
+      depositedAccount: formData.depositedAccount,
+      attachment: formData.attachment,
+      attachmentName: formData.attachmentName,
+    };
+    
+    addPayment(newPayment);
+    setLastPayment({ ...newPayment, tenantName: tenant?.name, premises: tenant?.premises });
+    setShowForm(false);
+    setShowReceipt(true);
     setFormData({
       tenantId: '',
-      monthYear: format(new Date(), 'yyyy-MM'),
-      amount: 0,
-      paymentDate: format(new Date(), 'yyyy-MM-dd'),
-      paymentMethod: 'cash',
+      amount: '',
+      date: new Date().toISOString().split('T')[0],
+      method: 'cash',
       transactionNo: '',
       depositedAccount: '',
+      attachment: '',
+      attachmentName: '',
     });
   };
 
-  const handleOpenModal = () => {
-    resetForm();
-    setShowModal(true);
-  };
+  const handlePrintReceipt = function() {
+    if (!lastPayment) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
 
-  const handleCloseModal = () => {
-    setShowModal(false);
-    resetForm();
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    addPayment(formData);
-    handleCloseModal();
-  };
-
-  const handleView = (payment: Payment) => {
-    setViewingPayment(payment);
-    setShowViewModal(true);
-  };
-
-  const getMethodIcon = (method: PaymentMethod) => {
-    switch (method) {
-      case 'cash':
-        return Banknote;
-      case 'bank':
-        return CreditCard;
-      case 'online':
-        return Smartphone;
-    }
-  };
-
-  const getMethodBadge = (method: PaymentMethod) => {
-    const styles = {
-      cash: 'bg-green-100 text-green-800',
-      bank: 'bg-blue-100 text-blue-800',
-      online: 'bg-purple-100 text-purple-800',
-    };
-    const Icon = getMethodIcon(method);
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${styles[method]}`}>
-        <Icon className="w-3 h-3" />
-        {method.charAt(0).toUpperCase() + method.slice(1)}
-      </span>
+    printWindow.document.write(
+      '<!DOCTYPE html><html><head><title>Payment Receipt</title>' +
+      '<style>' +
+      'body { font-family: Arial, sans-serif; padding: 40px; max-width: 400px; margin: 0 auto; }' +
+      '.receipt { border: 2px solid #000; padding: 20px; }' +
+      '.header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 15px; margin-bottom: 15px; }' +
+      '.header h1 { margin: 0; font-size: 24px; }' +
+      '.header p { margin: 5px 0; color: #666; }' +
+      '.title { text-align: center; font-size: 18px; font-weight: bold; margin: 15px 0; background: #000; color: #fff; padding: 5px; }' +
+      '.row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dotted #ccc; }' +
+      '.row:last-child { border-bottom: none; }' +
+      '.label { color: #666; }' +
+      '.value { font-weight: bold; }' +
+      '.amount { font-size: 24px; text-align: center; margin: 20px 0; padding: 15px; background: #f0f0f0; }' +
+      '.amount span { color: green; }' +
+      '.footer { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 2px dashed #000; font-size: 12px; color: #666; }' +
+      '</style></head><body>' +
+      '<div class="receipt">' +
+      '<div class="header"><h1>PLAZA RENT</h1><p>Payment Receipt</p></div>' +
+      '<div class="title">RECEIPT</div>' +
+      '<div class="row"><span class="label">Receipt No:</span><span class="value">' + lastPayment.id + '</span></div>' +
+      '<div class="row"><span class="label">Date:</span><span class="value">' + new Date(lastPayment.date).toLocaleDateString() + '</span></div>' +
+      '<div class="row"><span class="label">Tenant:</span><span class="value">' + lastPayment.tenantName + '</span></div>' +
+      '<div class="row"><span class="label">Shop:</span><span class="value">' + lastPayment.premises + '</span></div>' +
+      '<div class="row"><span class="label">Method:</span><span class="value">' + lastPayment.method.toUpperCase() + '</span></div>' +
+      (lastPayment.transactionNo ? '<div class="row"><span class="label">Transaction #:</span><span class="value">' + lastPayment.transactionNo + '</span></div>' : '') +
+      '<div class="amount">Amount Received<br/><span>Rs ' + lastPayment.amount.toLocaleString() + '</span></div>' +
+      '<div class="footer"><p>Thank you for your payment!</p><p>This is a computer generated receipt.</p></div>' +
+      '</div>' +
+      '<script>window.onload = function() { window.print(); }<\/script>' +
+      '</body></html>'
     );
+    printWindow.document.close();
   };
 
-  const getMonthOptions = () => {
-    const months = [];
-    const currentDate = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      months.push({
-        value: format(date, 'yyyy-MM'),
-        label: format(date, 'MMMM yyyy'),
-      });
-    }
-    return months;
+  const getPaymentWithTenant = function(payment: any) {
+    const tenant = tenants.find(function(t) { return t.id === payment.tenantId; });
+    return { ...payment, tenantName: tenant?.name || 'Unknown', premises: tenant?.premises || '' };
   };
 
-  const canAddPayment = user?.role === 'admin' || user?.role === 'accountant';
+  const sortedPayments = [...payments].sort(function(a, b) {
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Payments</h1>
-            <p className="text-gray-500 mt-1">Record and manage rent payments</p>
-          </div>
-          {canAddPayment && (
-            <button
-              onClick={handleOpenModal}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Record Payment
-            </button>
-          )}
+      <div className="p-4 md:p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Payments</h1>
+          <button
+            onClick={function() { setShowForm(true); }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            + Add Payment
+          </button>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Banknote className="w-6 h-6 text-green-600" />
+        {/* Receipt Modal */}
+        {showReceipt && lastPayment && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6">
+              <div className="text-center mb-4">
+                <div className="text-green-500 text-5xl mb-2">✓</div>
+                <h2 className="text-xl font-bold">Payment Recorded!</h2>
               </div>
-              <div>
-                <p className="text-sm text-gray-500">Cash Payments</p>
-                <p className="text-xl font-bold text-gray-900">
-                  Rs {payments.filter((p) => p.paymentMethod === 'cash').reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
-                </p>
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-gray-600">Tenant:</span>
+                  <span className="font-bold">{lastPayment.tenantName}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-gray-600">Shop:</span>
+                  <span className="font-bold">{lastPayment.premises}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-gray-600">Amount:</span>
+                  <span className="font-bold text-green-600">Rs {lastPayment.amount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-gray-600">Date:</span>
+                  <span className="font-bold">{new Date(lastPayment.date).toLocaleDateString()}</span>
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <CreditCard className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Bank Payments</p>
-                <p className="text-xl font-bold text-gray-900">
-                  Rs {payments.filter((p) => p.paymentMethod === 'bank').reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <Smartphone className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Online Payments</p>
-                <p className="text-xl font-bold text-gray-900">
-                  Rs {payments.filter((p) => p.paymentMethod === 'online').reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by tenant, premises, or transaction..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-            <select
-              value={methodFilter}
-              onChange={(e) => setMethodFilter(e.target.value as PaymentMethod | 'all')}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="all">All Methods</option>
-              <option value="cash">Cash</option>
-              <option value="bank">Bank</option>
-              <option value="online">Online</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Payments Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tenant
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Month
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Method
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Transaction
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPayments.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {getTenantName(payment.tenantId)}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {getTenantPremises(payment.tenantId)}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {format(parseISO(`${payment.monthYear}-01`), 'MMM yyyy')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-semibold text-green-600">
-                        Rs {payment.amount.toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {format(parseISO(payment.paymentDate), 'dd MMM yyyy')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getMethodBadge(payment.paymentMethod)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {payment.transactionNo || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleView(payment)}
-                        className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"
-                        title="View"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {filteredPayments.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No payments found</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Add Payment Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={handleCloseModal} />
-            <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full">
-              <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Record Payment</h2>
-                <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-6 h-6" />
+              <div className="flex gap-2">
+                <button
+                  onClick={handlePrintReceipt}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+                >
+                  🖨️ Print Receipt
+                </button>
+                <button
+                  onClick={function() { setShowReceipt(false); }}
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300"
+                >
+                  Close
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tenant *</label>
-                  <select
-                    required
-                    value={formData.tenantId}
-                    onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="">Select Tenant</option>
-                    {activeTenants.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} - {t.premises}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            </div>
+          </div>
+        )}
 
-                {formData.tenantId && (
-                  <div className="bg-indigo-50 p-4 rounded-lg">
-                    <p className="text-sm text-indigo-800">
-                      Outstanding for {format(parseISO(`${formData.monthYear}-01`), 'MMMM yyyy')}:{' '}
-                      <strong>
-                        Rs {getTenantOutstanding(formData.tenantId, formData.monthYear).toLocaleString()}
-                      </strong>
-                    </p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
+        {/* Add Payment Form */}
+        {showForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">Add Payment</h2>
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Month *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tenant *</label>
                     <select
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={formData.tenantId}
+                      onChange={function(e) { setFormData(function(prev) { return { ...prev, tenantId: e.target.value }; }); }}
                       required
-                      value={formData.monthYear}
-                      onChange={(e) => setFormData({ ...formData, monthYear: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     >
-                      {getMonthOptions().map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
+                      <option value="">-- Select Tenant --</option>
+                      {activeTenants.map(function(t) {
+                        return <option key={t.id} value={t.id}>{t.name} - {t.premises}</option>;
+                      })}
                     </select>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Amount (Rs) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Amount (Rs) *</label>
                     <input
                       type="number"
-                      required
+                      className="w-full border rounded-lg px-3 py-2"
                       value={formData.amount}
-                      onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      onChange={function(e) { setFormData(function(prev) { return { ...prev, amount: e.target.value }; }); }}
+                      required
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Payment Date *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
                     <input
                       type="date"
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={formData.date}
+                      onChange={function(e) { setFormData(function(prev) { return { ...prev, date: e.target.value }; }); }}
                       required
-                      value={formData.paymentDate}
-                      onChange={(e) => setFormData({ ...formData, paymentDate: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
                     <select
-                      required
-                      value={formData.paymentMethod}
-                      onChange={(e) =>
-                        setFormData({ ...formData, paymentMethod: e.target.value as PaymentMethod })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={formData.method}
+                      onChange={function(e) { setFormData(function(prev) { return { ...prev, method: e.target.value as 'cash' | 'bank' | 'online' }; }); }}
                     >
                       <option value="cash">Cash</option>
                       <option value="bank">Bank Transfer</option>
                       <option value="online">Online Payment</option>
                     </select>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Transaction No</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Transaction No</label>
                     <input
                       type="text"
+                      className="w-full border rounded-lg px-3 py-2"
                       value={formData.transactionNo}
-                      onChange={(e) => setFormData({ ...formData, transactionNo: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      onChange={function(e) { setFormData(function(prev) { return { ...prev, transactionNo: e.target.value }; }); }}
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Deposited Account</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Deposited Account</label>
                     <input
                       type="text"
+                      className="w-full border rounded-lg px-3 py-2"
                       value={formData.depositedAccount}
-                      onChange={(e) => setFormData({ ...formData, depositedAccount: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                      onChange={function(e) { setFormData(function(prev) { return { ...prev, depositedAccount: e.target.value }; }); }}
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Attachment (Bank Slip/Receipt)</label>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="w-full border rounded-lg px-3 py-2"
+                      onChange={handleFileChange}
+                    />
+                    {formData.attachmentName && (
+                      <p className="text-sm text-green-600 mt-1">✓ {formData.attachmentName}</p>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
+                <div className="flex gap-2 mt-6">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
                   >
-                    Record Payment
+                    Save Payment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={function() { setShowForm(false); }}
+                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300"
+                  >
+                    Cancel
                   </button>
                 </div>
               </form>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* View Payment Modal */}
-      {showViewModal && viewingPayment && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div
-              className="fixed inset-0 bg-black bg-opacity-50"
-              onClick={() => setShowViewModal(false)}
-            />
-            <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full">
-              <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Payment Receipt</h2>
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              <div className="p-6">
-                <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Receipt className="w-8 h-8 text-green-600" />
-                  </div>
-                  <p className="text-3xl font-bold text-green-600">
-                    Rs {viewingPayment.amount.toLocaleString()}
-                  </p>
-                  <p className="text-gray-500 mt-1">Payment Received</p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500">Tenant</span>
-                    <span className="font-medium">{getTenantName(viewingPayment.tenantId)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500">Premises</span>
-                    <span className="font-medium">{getTenantPremises(viewingPayment.tenantId)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500">Month</span>
-                    <span className="font-medium">
-                      {format(parseISO(`${viewingPayment.monthYear}-01`), 'MMMM yyyy')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500">Payment Date</span>
-                    <span className="font-medium">
-                      {format(parseISO(viewingPayment.paymentDate), 'dd MMM yyyy')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500">Method</span>
-                    {getMethodBadge(viewingPayment.paymentMethod)}
-                  </div>
-                  {viewingPayment.transactionNo && (
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-gray-500">Transaction No</span>
-                      <span className="font-medium">{viewingPayment.transactionNo}</span>
-                    </div>
-                  )}
-                  {viewingPayment.depositedAccount && (
-                    <div className="flex justify-between py-2 border-b border-gray-100">
-                      <span className="text-gray-500">Deposited To</span>
-                      <span className="font-medium">{viewingPayment.depositedAccount}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+        {/* Payments List */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="p-3 text-left">Date</th>
+                  <th className="p-3 text-left">Tenant</th>
+                  <th className="p-3 text-left">Shop</th>
+                  <th className="p-3 text-right">Amount</th>
+                  <th className="p-3 text-left">Method</th>
+                  <th className="p-3 text-left">Transaction #</th>
+                  <th className="p-3 text-center">Attachment</th>
+                  <th className="p-3 text-center">Receipt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedPayments.length > 0 ? sortedPayments.map(function(payment) {
+                  const p = getPaymentWithTenant(payment);
+                  return (
+                    <tr key={p.id} className="border-b hover:bg-gray-50">
+                      <td className="p-3">{new Date(p.date).toLocaleDateString()}</td>
+                      <td className="p-3 font-medium">{p.tenantName}</td>
+                      <td className="p-3">{p.premises}</td>
+                      <td className="p-3 text-right text-green-600 font-bold">Rs {p.amount.toLocaleString()}</td>
+                      <td className="p-3">
+                        <span className={
+                          p.method === 'cash' ? 'px-2 py-1 rounded text-xs bg-green-100 text-green-700' :
+                          p.method === 'bank' ? 'px-2 py-1 rounded text-xs bg-blue-100 text-blue-700' :
+                          'px-2 py-1 rounded text-xs bg-purple-100 text-purple-700'
+                        }>
+                          {p.method.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-3">{p.transactionNo || '-'}</td>
+                      <td className="p-3 text-center">
+                        {p.attachment ? (
+                          <a
+                            href={p.attachment}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            📎 View
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={function() {
+                            setLastPayment(p);
+                            handlePrintReceipt();
+                          }}
+                          className="text-blue-600 hover:underline"
+                        >
+                          🖨️ Print
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={8} className="p-8 text-center text-gray-500">
+                      No payments recorded yet
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+      </div>
     </Layout>
   );
 }

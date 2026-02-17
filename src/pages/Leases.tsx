@@ -1,510 +1,408 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, FileText, X, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { format, parseISO, differenceInDays, addMonths } from 'date-fns';
-import { useApp } from '../context/AppContext';
 import { Layout } from '../components/Layout';
-import { Lease, LeaseStatus } from '../types';
+import { useApp } from '../context/AppContext';
 
 export function Leases() {
-  const { tenants, leases, addLease, updateLease, applyRentIncrement, user, rentHistory } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<LeaseStatus | 'all'>('all');
-  const [showModal, setShowModal] = useState(false);
-  const [showIncrementModal, setShowIncrementModal] = useState(false);
-  const [editingLease, setEditingLease] = useState<Lease | null>(null);
-  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-
+  const { tenants, leases, addLease, updateLease } = useApp();
+  const [showForm, setShowForm] = useState(false);
+  const [editingLease, setEditingLease] = useState<any>(null);
+  const [showDocs, setShowDocs] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     tenantId: '',
     startDate: '',
     endDate: '',
-    durationMonths: 12,
-    incrementPercent: 10,
-    reminderDays: 30,
-    status: 'running' as LeaseStatus,
+    incrementPercent: '10',
+    reminderDays: '30',
+    documents: [] as Array<{name: string; type: string; data: string; uploadDate: string;}>,
   });
 
-  const tenantsWithoutLease = tenants.filter(
-    (t) => t.status === 'active' && !leases.find((l) => l.tenantId === t.id)
-  );
+  const activeTenants = tenants.filter(function(t) { return t.status === 'active'; });
 
-  const filteredLeases = leases.filter((lease) => {
-    const tenant = tenants.find((t) => t.id === lease.tenantId);
-    const matchesSearch =
-      tenant?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tenant?.premises.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || lease.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const getTenantName = (tenantId: string) => {
-    return tenants.find((t) => t.id === tenantId)?.name || 'Unknown';
+  const handleFileUpload = function(e: React.ChangeEvent<HTMLInputElement>, docType: string) {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = function() {
+        const newDoc = {
+          name: file.name,
+          type: docType,
+          data: reader.result as string,
+          uploadDate: new Date().toISOString(),
+        };
+        setFormData(function(prev) {
+          return { ...prev, documents: [...prev.documents, newDoc] };
+        });
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  const getTenantPremises = (tenantId: string) => {
-    return tenants.find((t) => t.id === tenantId)?.premises || '-';
+  const removeDocument = function(index: number) {
+    setFormData(function(prev) {
+      const newDocs = [...prev.documents];
+      newDocs.splice(index, 1);
+      return { ...prev, documents: newDocs };
+    });
   };
 
-  const getTenantRent = (tenantId: string) => {
-    return tenants.find((t) => t.id === tenantId)?.monthlyRent || 0;
-  };
+  const handleSubmit = function(e: React.FormEvent) {
+    e.preventDefault();
+    const leaseData = {
+      id: editingLease ? editingLease.id : 'L' + Date.now(),
+      tenantId: formData.tenantId,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      incrementPercent: parseInt(formData.incrementPercent),
+      reminderDays: parseInt(formData.reminderDays),
+      status: 'running' as const,
+      documents: formData.documents,
+    };
 
-  const resetForm = () => {
+    if (editingLease) {
+      updateLease(leaseData);
+    } else {
+      addLease(leaseData);
+    }
+
+    setShowForm(false);
+    setEditingLease(null);
     setFormData({
       tenantId: '',
       startDate: '',
       endDate: '',
-      durationMonths: 12,
-      incrementPercent: 10,
-      reminderDays: 30,
-      status: 'running',
+      incrementPercent: '10',
+      reminderDays: '30',
+      documents: [],
     });
-    setEditingLease(null);
   };
 
-  const handleOpenModal = (lease?: Lease) => {
-    if (lease) {
-      setEditingLease(lease);
-      setFormData({
-        tenantId: lease.tenantId,
-        startDate: lease.startDate,
-        endDate: lease.endDate,
-        durationMonths: lease.durationMonths,
-        incrementPercent: lease.incrementPercent,
-        reminderDays: lease.reminderDays,
-        status: lease.status,
-      });
-    } else {
-      resetForm();
-    }
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowModal(false);
-    resetForm();
-  };
-
-  const handleDurationChange = (months: number) => {
-    if (formData.startDate) {
-      const endDate = addMonths(parseISO(formData.startDate), months);
-      setFormData({
-        ...formData,
-        durationMonths: months,
-        endDate: format(endDate, 'yyyy-MM-dd'),
-      });
-    } else {
-      setFormData({ ...formData, durationMonths: months });
-    }
-  };
-
-  const handleStartDateChange = (startDate: string) => {
-    const endDate = addMonths(parseISO(startDate), formData.durationMonths);
+  const handleEdit = function(lease: any) {
+    setEditingLease(lease);
     setFormData({
-      ...formData,
-      startDate,
-      endDate: format(endDate, 'yyyy-MM-dd'),
+      tenantId: lease.tenantId,
+      startDate: lease.startDate,
+      endDate: lease.endDate,
+      incrementPercent: lease.incrementPercent.toString(),
+      reminderDays: lease.reminderDays.toString(),
+      documents: lease.documents || [],
     });
+    setShowForm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingLease) {
-      updateLease(editingLease.id, formData);
+  const getLeaseWithTenant = function(lease: any) {
+    const tenant = tenants.find(function(t) { return t.id === lease.tenantId; });
+    return { ...lease, tenantName: tenant?.name || 'Unknown', premises: tenant?.premises || '' };
+  };
+
+  const getLeaseStatus = function(lease: any) {
+    const endDate = new Date(lease.endDate);
+    const today = new Date();
+    const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysRemaining < 0) {
+      return { status: 'Expired', color: 'bg-red-100 text-red-700', days: daysRemaining };
+    } else if (daysRemaining <= lease.reminderDays) {
+      return { status: 'Expiring Soon', color: 'bg-yellow-100 text-yellow-700', days: daysRemaining };
     } else {
-      addLease(formData);
-    }
-    handleCloseModal();
-  };
-
-  const handleRenew = (lease: Lease) => {
-    const newStartDate = parseISO(lease.endDate);
-    const newEndDate = addMonths(newStartDate, lease.durationMonths);
-    updateLease(lease.id, {
-      startDate: format(newStartDate, 'yyyy-MM-dd'),
-      endDate: format(newEndDate, 'yyyy-MM-dd'),
-      status: 'renewed',
-    });
-  };
-
-  const handleApplyIncrement = () => {
-    if (selectedTenantId) {
-      applyRentIncrement(selectedTenantId);
-      setShowIncrementModal(false);
-      setSelectedTenantId(null);
+      return { status: 'Running', color: 'bg-green-100 text-green-700', days: daysRemaining };
     }
   };
-
-  const getStatusBadge = (status: LeaseStatus) => {
-    const styles = {
-      running: 'bg-green-100 text-green-800',
-      expired: 'bg-red-100 text-red-800',
-      renewed: 'bg-blue-100 text-blue-800',
-    };
-    const icons = {
-      running: CheckCircle,
-      expired: AlertTriangle,
-      renewed: Clock,
-    };
-    const Icon = icons[status];
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${styles[status]}`}>
-        <Icon className="w-3 h-3" />
-        {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
-    );
-  };
-
-  const getExpiryInfo = (lease: Lease) => {
-    const daysToExpiry = differenceInDays(parseISO(lease.endDate), new Date());
-    if (daysToExpiry < 0) {
-      return { text: 'Expired', color: 'text-red-600', urgent: true };
-    } else if (daysToExpiry <= 30) {
-      return { text: `${daysToExpiry} days left`, color: 'text-red-600', urgent: true };
-    } else if (daysToExpiry <= 60) {
-      return { text: `${daysToExpiry} days left`, color: 'text-amber-600', urgent: false };
-    }
-    return { text: `${daysToExpiry} days left`, color: 'text-green-600', urgent: false };
-  };
-
-  const isAdmin = user?.role === 'admin';
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Lease Management</h1>
-            <p className="text-gray-500 mt-1">Track and manage lease agreements</p>
-          </div>
-          {isAdmin && tenantsWithoutLease.length > 0 && (
-            <button
-              onClick={() => handleOpenModal()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Add Lease
-            </button>
-          )}
+      <div className="p-4 md:p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Lease Management</h1>
+          <button
+            onClick={function() { setShowForm(true); setEditingLease(null); }}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            + Add Lease
+          </button>
         </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by tenant name or premises..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as LeaseStatus | 'all')}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="all">All Status</option>
-              <option value="running">Running</option>
-              <option value="expired">Expired</option>
-              <option value="renewed">Renewed</option>
-            </select>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h3 className="text-green-800 font-medium">Running</h3>
+            <p className="text-2xl font-bold text-green-600">
+              {leases.filter(function(l) { return getLeaseStatus(l).status === 'Running'; }).length}
+            </p>
+          </div>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <h3 className="text-yellow-800 font-medium">Expiring Soon</h3>
+            <p className="text-2xl font-bold text-yellow-600">
+              {leases.filter(function(l) { return getLeaseStatus(l).status === 'Expiring Soon'; }).length}
+            </p>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <h3 className="text-red-800 font-medium">Expired</h3>
+            <p className="text-2xl font-bold text-red-600">
+              {leases.filter(function(l) { return getLeaseStatus(l).status === 'Expired'; }).length}
+            </p>
           </div>
         </div>
 
-        {/* Leases Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredLeases.map((lease) => {
-            const expiryInfo = getExpiryInfo(lease);
-            const tenantRent = getTenantRent(lease.tenantId);
-            const tenantHistory = rentHistory.filter((h) => h.tenantId === lease.tenantId);
-            
-            return (
-              <div
-                key={lease.id}
-                className={`bg-white rounded-xl shadow-sm border ${
-                  expiryInfo.urgent ? 'border-red-200' : 'border-gray-100'
-                } p-6`}
-              >
-                <div className="flex items-start justify-between mb-4">
+        {/* Add/Edit Form Modal */}
+        {showForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">{editingLease ? 'Edit Lease' : 'Add New Lease'}</h2>
+              <form onSubmit={handleSubmit}>
+                <div className="space-y-4">
                   <div>
-                    <h3 className="font-semibold text-gray-900">{getTenantName(lease.tenantId)}</h3>
-                    <p className="text-sm text-gray-500">{getTenantPremises(lease.tenantId)}</p>
-                  </div>
-                  {getStatusBadge(lease.status)}
-                </div>
-
-                <div className="space-y-3 mb-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Start Date</span>
-                    <span className="font-medium">{format(parseISO(lease.startDate), 'dd MMM yyyy')}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">End Date</span>
-                    <span className="font-medium">{format(parseISO(lease.endDate), 'dd MMM yyyy')}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Duration</span>
-                    <span className="font-medium">{lease.durationMonths} months</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Annual Increment</span>
-                    <span className="font-medium">{lease.incrementPercent}%</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Current Rent</span>
-                    <span className="font-medium text-indigo-600">Rs {tenantRent.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className={`p-3 rounded-lg ${expiryInfo.urgent ? 'bg-red-50' : 'bg-gray-50'} mb-4`}>
-                  <p className={`text-sm font-medium ${expiryInfo.color}`}>{expiryInfo.text}</p>
-                </div>
-
-                {tenantHistory.length > 0 && (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-blue-600 font-medium mb-1">Rent History</p>
-                    {tenantHistory.slice(-2).map((h) => (
-                      <p key={h.id} className="text-xs text-blue-800">
-                        Rs {h.oldRent.toLocaleString()} → Rs {h.newRent.toLocaleString()} (+{h.incrementPercent}%)
-                      </p>
-                    ))}
-                  </div>
-                )}
-
-                {isAdmin && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleOpenModal(lease)}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Edit
-                    </button>
-                    {lease.status !== 'running' && (
-                      <button
-                        onClick={() => handleRenew(lease)}
-                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
-                      >
-                        <FileText className="w-4 h-4" />
-                        Renew
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setSelectedTenantId(lease.tenantId);
-                        setShowIncrementModal(true);
-                      }}
-                      className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
-                    >
-                      +{lease.incrementPercent}%
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {filteredLeases.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-xl">
-            <p className="text-gray-500">No leases found</p>
-          </div>
-        )}
-      </div>
-
-      {/* Add/Edit Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={handleCloseModal} />
-            <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full">
-              <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  {editingLease ? 'Edit Lease' : 'Add New Lease'}
-                </h2>
-                <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Tenant *</label>
-                  <select
-                    required
-                    value={formData.tenantId}
-                    onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                    disabled={!!editingLease}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-gray-100"
-                  >
-                    <option value="">Select Tenant</option>
-                    {editingLease ? (
-                      <option value={editingLease.tenantId}>
-                        {getTenantName(editingLease.tenantId)} - {getTenantPremises(editingLease.tenantId)}
-                      </option>
-                    ) : (
-                      tenantsWithoutLease.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} - {t.premises}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
-                    <input
-                      type="date"
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tenant *</label>
+                    <select
+                      className="w-full border rounded-lg px-3 py-2"
+                      value={formData.tenantId}
+                      onChange={function(e) { setFormData(function(prev) { return { ...prev, tenantId: e.target.value }; }); }}
                       required
-                      value={formData.startDate}
-                      onChange={(e) => handleStartDateChange(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Duration (Months)</label>
-                    <select
-                      value={formData.durationMonths}
-                      onChange={(e) => handleDurationChange(Number(e.target.value))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                     >
-                      <option value={6}>6 Months</option>
-                      <option value={12}>12 Months</option>
-                      <option value={24}>24 Months</option>
-                      <option value={36}>36 Months</option>
+                      <option value="">-- Select Tenant --</option>
+                      {activeTenants.map(function(t) {
+                        return <option key={t.id} value={t.id}>{t.name} - {t.premises}</option>;
+                      })}
                     </select>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                  <input
-                    type="date"
-                    value={formData.endDate}
-                    readOnly
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Annual Increment %
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.incrementPercent}
-                      onChange={(e) =>
-                        setFormData({ ...formData, incrementPercent: Number(e.target.value) })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+                      <input
+                        type="date"
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={formData.startDate}
+                        onChange={function(e) { setFormData(function(prev) { return { ...prev, startDate: e.target.value }; }); }}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+                      <input
+                        type="date"
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={formData.endDate}
+                        onChange={function(e) { setFormData(function(prev) { return { ...prev, endDate: e.target.value }; }); }}
+                        required
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Reminder Days
-                    </label>
-                    <select
-                      value={formData.reminderDays}
-                      onChange={(e) =>
-                        setFormData({ ...formData, reminderDays: Number(e.target.value) })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                    >
-                      <option value={30}>30 Days Before</option>
-                      <option value={60}>60 Days Before</option>
-                      <option value={90}>90 Days Before</option>
-                    </select>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Annual Increment %</label>
+                      <input
+                        type="number"
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={formData.incrementPercent}
+                        onChange={function(e) { setFormData(function(prev) { return { ...prev, incrementPercent: e.target.value }; }); }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Reminder Days</label>
+                      <select
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={formData.reminderDays}
+                        onChange={function(e) { setFormData(function(prev) { return { ...prev, reminderDays: e.target.value }; }); }}
+                      >
+                        <option value="30">30 Days</option>
+                        <option value="60">60 Days</option>
+                        <option value="90">90 Days</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Document Upload Section */}
+                  <div className="border-t pt-4">
+                    <h3 className="font-medium mb-3">Documents</h3>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Lease Agreement (PDF)</label>
+                        <input
+                          type="file"
+                          accept=".pdf"
+                          className="w-full border rounded px-3 py-2 text-sm"
+                          onChange={function(e) { handleFileUpload(e, 'Lease Agreement'); }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">CNIC Copy</label>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="w-full border rounded px-3 py-2 text-sm"
+                          onChange={function(e) { handleFileUpload(e, 'CNIC'); }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-1">Other Documents</label>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="w-full border rounded px-3 py-2 text-sm"
+                          onChange={function(e) { handleFileUpload(e, 'Other'); }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Uploaded Documents List */}
+                    {formData.documents.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-sm font-medium text-gray-700">Uploaded:</p>
+                        {formData.documents.map(function(doc, idx) {
+                          return (
+                            <div key={idx} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                              <span className="text-sm">
+                                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs mr-2">{doc.type}</span>
+                                {doc.name}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={function() { removeDocument(idx); }}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) =>
-                      setFormData({ ...formData, status: e.target.value as LeaseStatus })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  >
-                    <option value="running">Running</option>
-                    <option value="expired">Expired</option>
-                    <option value="renewed">Renewed</option>
-                  </select>
-                </div>
-
-                <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Cancel
-                  </button>
+                <div className="flex gap-2 mt-6">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
                   >
-                    {editingLease ? 'Update Lease' : 'Add Lease'}
+                    {editingLease ? 'Update Lease' : 'Save Lease'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={function() { setShowForm(false); setEditingLease(null); }}
+                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300"
+                  >
+                    Cancel
                   </button>
                 </div>
               </form>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Increment Modal */}
-      {showIncrementModal && selectedTenantId && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div
-              className="fixed inset-0 bg-black bg-opacity-50"
-              onClick={() => setShowIncrementModal(false)}
-            />
-            <div className="relative bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Apply Rent Increment</h2>
-              <p className="text-gray-600 mb-4">
-                Are you sure you want to apply the annual rent increment for{' '}
-                <strong>{getTenantName(selectedTenantId)}</strong>?
-              </p>
-              <div className="bg-indigo-50 p-4 rounded-lg mb-6">
-                <p className="text-sm text-indigo-800">
-                  Current Rent: <strong>Rs {getTenantRent(selectedTenantId).toLocaleString()}</strong>
-                </p>
-                <p className="text-sm text-indigo-800">
-                  New Rent:{' '}
-                  <strong>
-                    Rs{' '}
-                    {Math.round(
-                      getTenantRent(selectedTenantId) *
-                        (1 + (leases.find((l) => l.tenantId === selectedTenantId)?.incrementPercent || 10) / 100)
-                    ).toLocaleString()}
-                  </strong>
-                </p>
-              </div>
-              <div className="flex justify-end gap-4">
-                <button
-                  onClick={() => setShowIncrementModal(false)}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleApplyIncrement}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  Apply Increment
-                </button>
-              </div>
+        {/* Documents View Modal */}
+        {showDocs && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-lg p-6">
+              <h2 className="text-xl font-bold mb-4">Lease Documents</h2>
+              {(function() {
+                const lease = leases.find(function(l) { return l.id === showDocs; });
+                const docs = lease?.documents || [];
+                if (docs.length === 0) {
+                  return <p className="text-gray-500 text-center py-4">No documents uploaded</p>;
+                }
+                return (
+                  <div className="space-y-2">
+                    {docs.map(function(doc: any, idx: number) {
+                      return (
+                        <div key={idx} className="flex items-center justify-between bg-gray-50 p-3 rounded">
+                          <div>
+                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs mr-2">{doc.type}</span>
+                            <span className="text-sm">{doc.name}</span>
+                          </div>
+                          <a
+                            href={doc.data}
+                            download={doc.name}
+                            className="text-blue-600 hover:underline text-sm"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+              <button
+                onClick={function() { setShowDocs(null); }}
+                className="w-full mt-4 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300"
+              >
+                Close
+              </button>
             </div>
           </div>
+        )}
+
+        {/* Leases Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="p-3 text-left">Tenant</th>
+                  <th className="p-3 text-left">Shop</th>
+                  <th className="p-3 text-left">Start Date</th>
+                  <th className="p-3 text-left">End Date</th>
+                  <th className="p-3 text-center">Increment %</th>
+                  <th className="p-3 text-center">Status</th>
+                  <th className="p-3 text-center">Days Left</th>
+                  <th className="p-3 text-center">Docs</th>
+                  <th className="p-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leases.length > 0 ? leases.map(function(lease) {
+                  const l = getLeaseWithTenant(lease);
+                  const status = getLeaseStatus(lease);
+                  return (
+                    <tr key={l.id} className="border-b hover:bg-gray-50">
+                      <td className="p-3 font-medium">{l.tenantName}</td>
+                      <td className="p-3">{l.premises}</td>
+                      <td className="p-3">{new Date(l.startDate).toLocaleDateString()}</td>
+                      <td className="p-3">{new Date(l.endDate).toLocaleDateString()}</td>
+                      <td className="p-3 text-center">{l.incrementPercent}%</td>
+                      <td className="p-3 text-center">
+                        <span className={'px-2 py-1 rounded text-xs ' + status.color}>
+                          {status.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={status.days < 0 ? 'text-red-600' : status.days <= 30 ? 'text-yellow-600' : 'text-green-600'}>
+                          {status.days < 0 ? 'Expired' : status.days + ' days'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={function() { setShowDocs(l.id); }}
+                          className="text-blue-600 hover:underline"
+                        >
+                          📄 {(l.documents || []).length}
+                        </button>
+                      </td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={function() { handleEdit(l); }}
+                          className="text-blue-600 hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-gray-500">
+                      No leases found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
+      </div>
     </Layout>
   );
 }
