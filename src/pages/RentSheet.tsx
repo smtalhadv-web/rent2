@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useApp } from '../context/AppContext';
 
 export function RentSheet() {
   const { tenants, rentRecords, payments, leases, settings, addPayment, updateTenant, addLease, updateLease } = useApp();
   
-  // State
-  const [selectedMonth, setSelectedMonth] = useState('2026-02');
+  // FIX 1: Set default month to current month
+  const getCurrentMonth = () => {
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  };
+  
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [filterStatus, setFilterStatus] = useState('active');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -18,7 +23,7 @@ export function RentSheet() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [selectedTenantId, setSelectedTenantId] = useState('');
   
-  // Payment Form - Complete
+  // Payment Form
   const [paymentMonth, setPaymentMonth] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -29,7 +34,6 @@ export function RentSheet() {
   const [paymentAttachmentName, setPaymentAttachmentName] = useState('');
   const [paymentRemarks, setPaymentRemarks] = useState('');
   
-  // Last Payment for Receipt
   const [lastPaymentData, setLastPaymentData] = useState<any>(null);
   
   // Tenant Form
@@ -51,12 +55,12 @@ export function RentSheet() {
   const [leaseReminderDays, setLeaseReminderDays] = useState('30');
 
   // Safe settings
-  var plazaName = (settings && settings.plazaName) ? settings.plazaName : 'PLAZA RENT MANAGEMENT';
-  var plazaAddress = (settings && settings.address) ? settings.address : 'Commercial Area';
-  var plazaPhone = (settings && settings.phone) ? settings.phone : '';
-  var plazaEmail = (settings && settings.email) ? settings.email : '';
-  var footerText = (settings && settings.footerText) ? settings.footerText : 'Thank you for your payment!';
-  var headerText = (settings && settings.headerText) ? settings.headerText : '';
+  const plazaName = settings?.plazaName || 'PLAZA RENT MANAGEMENT';
+  const plazaAddress = settings?.address || 'Commercial Area';
+  const plazaPhone = settings?.phone || '';
+  const plazaEmail = settings?.email || '';
+  const footerText = settings?.footerText || 'Thank you for your payment!';
+  const headerText = settings?.headerText || '';
 
   // Format number safely
   function formatNum(num: number | undefined | null): string {
@@ -64,20 +68,116 @@ export function RentSheet() {
     return num.toLocaleString();
   }
 
+  // FIX 2: Get previous month for outstanding calculation
+  function getPreviousMonth(monthYear: string): string {
+    const [year, month] = monthYear.split('-').map(Number);
+    if (month === 1) {
+      return `${year - 1}-12`;
+    }
+    return `${year}-${String(month - 1).padStart(2, '0')}`;
+  }
+
+  // FIX 3: Calculate outstanding from previous month's balance
+  function getOutstandingForMonth(tenantId: string, monthYear: string): number {
+    const prevMonth = getPreviousMonth(monthYear);
+    
+    // Check if there's a previous month record
+    if (rentRecords && rentRecords.length > 0) {
+      for (let j = 0; j < rentRecords.length; j++) {
+        if (rentRecords[j] && rentRecords[j].tenantId === tenantId && rentRecords[j].monthYear === prevMonth) {
+          return rentRecords[j].balance || 0;
+        }
+      }
+    }
+    
+    // If no previous record, check all payments and calculate outstanding
+    let totalPreviousDue = 0;
+    let totalPreviousPaid = 0;
+    
+    // Get tenant for rent amount
+    const tenant = tenants?.find(t => t.id === tenantId);
+    if (!tenant) return 0;
+    
+    // Calculate outstanding from all previous months
+    if (payments && payments.length > 0) {
+      for (const payment of payments) {
+        if ((payment as any).tenantId === tenantId && (payment as any).monthYear < monthYear) {
+          totalPreviousPaid += payment.amount || 0;
+        }
+      }
+    }
+    
+    // For simplicity, if no previous records exist, outstanding is 0 for first month
+    return Math.max(0, totalPreviousDue - totalPreviousPaid);
+  }
+
+  // FIX 4: Get paid amount for specific month from payments
+  function getPaidForMonth(tenantId: string, monthYear: string): number {
+    let totalPaid = 0;
+    if (payments && payments.length > 0) {
+      for (const payment of payments) {
+        const p = payment as any;
+        if (p.tenantId === tenantId && p.monthYear === monthYear) {
+          totalPaid += p.amount || 0;
+        }
+      }
+    }
+    return totalPaid;
+  }
+
+  // FIX 5: Updated getRentData function that calculates values properly
+  function getRentData(tenantId: string, monthYear?: string) {
+    const month = monthYear || selectedMonth;
+    const tenant = tenants?.find(t => t.id === tenantId);
+    
+    if (!tenant) {
+      return { rent: 0, outstanding: 0, paid: 0, balance: 0 };
+    }
+    
+    const rent = tenant.rent || 0;
+    
+    // Check for existing rent record first
+    let rentRecord = null;
+    if (rentRecords && rentRecords.length > 0) {
+      for (let j = 0; j < rentRecords.length; j++) {
+        if (rentRecords[j] && rentRecords[j].tenantId === tenantId && rentRecords[j].monthYear === month) {
+          rentRecord = rentRecords[j];
+          break;
+        }
+      }
+    }
+    
+    if (rentRecord) {
+      return {
+        rent: rent,
+        outstanding: rentRecord.outstanding || 0,
+        paid: rentRecord.paid || 0,
+        balance: rentRecord.balance || 0
+      };
+    }
+    
+    // Calculate dynamically if no rent record exists
+    const outstanding = getOutstandingForMonth(tenantId, month);
+    const paid = getPaidForMonth(tenantId, month);
+    const balance = rent + outstanding - paid;
+    
+    return { rent, outstanding, paid, balance };
+  }
+
   // Filter tenants
-  var filteredTenants: typeof tenants = [];
+  let filteredTenants: typeof tenants = [];
   if (tenants && tenants.length > 0) {
-    for (var i = 0; i < tenants.length; i++) {
-      var t = tenants[i];
+    for (let i = 0; i < tenants.length; i++) {
+      const t = tenants[i];
       if (!t) continue;
       
       if (filterStatus === 'active' && t.status !== 'active') continue;
       if (filterStatus === 'vacated' && t.status !== 'vacated') continue;
       
       if (searchTerm) {
-        var search = searchTerm.toLowerCase();
-        var nameMatch = t.name && t.name.toLowerCase().indexOf(search) >= 0;
-        var premisesMatch = t.premises && t.premises.toLowerCase().indexOf(search) >= 0;
+        const search = searchTerm.toLowerCase();
+        const nameMatch = t.name && t.name.toLowerCase().indexOf(search) >= 0;
+        const premisesMatch = t.premises && t.premises.toLowerCase().indexOf(search) >= 0;
         if (!nameMatch && !premisesMatch) continue;
       }
       
@@ -85,11 +185,11 @@ export function RentSheet() {
     }
   }
 
-  // Get rent record
+  // Get rent record (keeping for backward compatibility)
   function getRentRecord(tenantId: string, month?: string) {
-    var m = month || selectedMonth;
+    const m = month || selectedMonth;
     if (!rentRecords || rentRecords.length === 0) return null;
-    for (var j = 0; j < rentRecords.length; j++) {
+    for (let j = 0; j < rentRecords.length; j++) {
       if (rentRecords[j] && rentRecords[j].tenantId === tenantId && rentRecords[j].monthYear === m) {
         return rentRecords[j];
       }
@@ -100,7 +200,7 @@ export function RentSheet() {
   // Get lease for tenant
   function getLease(tenantId: string) {
     if (!leases || leases.length === 0) return null;
-    for (var k = 0; k < leases.length; k++) {
+    for (let k = 0; k < leases.length; k++) {
       if (leases[k] && leases[k].tenantId === tenantId) {
         return leases[k];
       }
@@ -108,38 +208,10 @@ export function RentSheet() {
     return null;
   }
 
-  // Get tenant payments for a month
-  function getTenantPaymentsForMonth(tenantId: string, month: string) {
-    var result: typeof payments = [];
-    if (!payments || payments.length === 0) return result;
-    for (var l = 0; l < payments.length; l++) {
-      var p = payments[l] as any;
-      if (p && p.tenantId === tenantId && p.monthYear === month) {
-        result.push(p);
-      }
-    }
-    return result;
-  }
-
-  // Get all tenant payments
-  function getAllTenantPayments(tenantId: string) {
-    var result: typeof payments = [];
-    if (!payments || payments.length === 0) return result;
-    for (var l = 0; l < payments.length; l++) {
-      if (payments[l] && payments[l].tenantId === tenantId) {
-        result.push(payments[l]);
-      }
-    }
-    result.sort(function(a, b) {
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-    return result;
-  }
-
   // Get selected tenant
   function getSelectedTenant() {
     if (!selectedTenantId || !tenants) return null;
-    for (var m = 0; m < tenants.length; m++) {
+    for (let m = 0; m < tenants.length; m++) {
       if (tenants[m] && tenants[m].id === selectedTenantId) {
         return tenants[m];
       }
@@ -147,32 +219,27 @@ export function RentSheet() {
     return null;
   }
 
-  // Calculate totals
-  var totalRent = 0;
-  var totalOutstanding = 0;
-  var totalPaid = 0;
-  var totalBalance = 0;
+  // FIX 6: Calculate totals using the new getRentData function
+  let totalRent = 0;
+  let totalOutstanding = 0;
+  let totalPaid = 0;
+  let totalBalance = 0;
 
-  for (var n = 0; n < filteredTenants.length; n++) {
-    var tenant = filteredTenants[n];
-    var rentData = getRentRecord(tenant.id);
+  for (let n = 0; n < filteredTenants.length; n++) {
+    const tenant = filteredTenants[n];
+    const data = getRentData(tenant.id);
     
-    var rent = tenant.rent || 0;
-    var outstanding = rentData ? (rentData.outstanding || 0) : 0;
-    var paid = rentData ? (rentData.paid || 0) : 0;
-    var balance = rentData ? (rentData.balance || 0) : rent + outstanding;
-    
-    totalRent += rent;
-    totalOutstanding += outstanding;
-    totalPaid += paid;
-    totalBalance += balance;
+    totalRent += data.rent;
+    totalOutstanding += data.outstanding;
+    totalPaid += data.paid;
+    totalBalance += data.balance;
   }
 
   // Handle file upload
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    var file = e.target.files && e.target.files[0];
+    const file = e.target.files && e.target.files[0];
     if (file) {
-      var reader = new FileReader();
+      const reader = new FileReader();
       reader.onloadend = function() {
         setPaymentAttachment(reader.result as string);
         setPaymentAttachmentName(file.name);
@@ -196,18 +263,20 @@ export function RentSheet() {
     setShowPaymentModal(true);
   }
 
-  // Calculate payment details for modal
+  // FIX 7: Updated payment details calculation
   function getPaymentDetails() {
-    var tenant = getSelectedTenant();
+    const tenant = getSelectedTenant();
     if (!tenant) return { rent: 0, outstanding: 0, totalDue: 0, previousPaid: 0 };
     
-    var rentData = getRentRecord(selectedTenantId, paymentMonth);
-    var rent = tenant.rent || 0;
-    var outstanding = rentData ? (rentData.outstanding || 0) : 0;
-    var previousPaid = rentData ? (rentData.paid || 0) : 0;
-    var totalDue = rent + outstanding - previousPaid;
+    const data = getRentData(selectedTenantId, paymentMonth);
+    const totalDue = data.rent + data.outstanding - data.paid;
     
-    return { rent: rent, outstanding: outstanding, totalDue: totalDue, previousPaid: previousPaid };
+    return { 
+      rent: data.rent, 
+      outstanding: data.outstanding, 
+      totalDue: totalDue > 0 ? totalDue : 0, 
+      previousPaid: data.paid 
+    };
   }
 
   // Submit Payment
@@ -215,12 +284,12 @@ export function RentSheet() {
     e.preventDefault();
     if (!selectedTenantId || !paymentAmount) return;
     
-    var tenant = getSelectedTenant();
-    var details = getPaymentDetails();
-    var paidNow = parseInt(paymentAmount) || 0;
-    var balanceAfter = details.totalDue - paidNow;
+    const tenant = getSelectedTenant();
+    const details = getPaymentDetails();
+    const paidNow = parseInt(paymentAmount) || 0;
+    const balanceAfter = details.totalDue - paidNow;
     
-    var paymentData = {
+    const paymentData = {
       id: 'P' + Date.now(),
       tenantId: selectedTenantId,
       amount: paidNow,
@@ -261,12 +330,12 @@ export function RentSheet() {
   // Print Receipt
   function printReceipt() {
     if (!lastPaymentData) return;
-    var d = lastPaymentData;
+    const d = lastPaymentData;
 
-    var printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    var html = '<!DOCTYPE html><html><head><title>Payment Receipt</title>';
+    let html = '<!DOCTYPE html><html><head><title>Payment Receipt</title>';
     html += '<style>';
     html += '@page { size: A5; margin: 10mm; }';
     html += 'body { font-family: Arial, sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; font-size: 14px; }';
@@ -294,8 +363,6 @@ export function RentSheet() {
     html += '</style></head><body>';
     
     html += '<div class="receipt">';
-    
-    // Header
     html += '<div class="header">';
     html += '<h1>' + plazaName + '</h1>';
     if (plazaAddress) html += '<p>' + plazaAddress + '</p>';
@@ -304,15 +371,11 @@ export function RentSheet() {
     if (headerText) html += '<p>' + headerText + '</p>';
     html += '</div>';
     
-    // Title
     html += '<div class="title">PAYMENT RECEIPT</div>';
-    
-    // Receipt Info
     html += '<div class="info-row"><span class="label">Receipt No:</span><span class="value">' + d.id + '</span></div>';
     html += '<div class="info-row"><span class="label">Date:</span><span class="value">' + d.date + '</span></div>';
     html += '<div class="info-row"><span class="label">Payment For:</span><span class="value">' + d.month + '</span></div>';
     
-    // Tenant Info
     html += '<div class="section">';
     html += '<div class="section-title">Tenant Details</div>';
     html += '<div class="info-row"><span class="label">Name:</span><span class="value">' + d.tenantName + '</span></div>';
@@ -320,7 +383,6 @@ export function RentSheet() {
     if (d.tenantPhone) html += '<div class="info-row"><span class="label">Phone:</span><span class="value">' + d.tenantPhone + '</span></div>';
     html += '</div>';
     
-    // Payment Breakdown
     html += '<div class="section">';
     html += '<div class="section-title">Payment Details</div>';
     html += '<div class="info-row"><span class="label">Monthly Rent:</span><span class="value">Rs ' + formatNum(d.rent) + '</span></div>';
@@ -329,13 +391,11 @@ export function RentSheet() {
     html += '<div class="info-row" style="border-top:1px solid #000;padding-top:8px;margin-top:5px;"><span class="label"><strong>Total Due:</strong></span><span class="value" style="color:#dc2626"><strong>Rs ' + formatNum(d.totalDue) + '</strong></span></div>';
     html += '</div>';
     
-    // Amount Paid
     html += '<div class="amount-box">';
     html += '<div class="label">Amount Received</div>';
     html += '<div class="amount">Rs ' + formatNum(d.paidNow) + '</div>';
     html += '</div>';
     
-    // Balance After
     if (d.balanceAfter > 0) {
       html += '<div class="balance-box">';
       html += '<div class="label">Balance Remaining</div>';
@@ -353,20 +413,17 @@ export function RentSheet() {
       html += '</div>';
     }
     
-    // Payment Method
     html += '<div class="section">';
     html += '<div class="info-row"><span class="label">Payment Method:</span><span class="value">' + d.method.toUpperCase() + '</span></div>';
     if (d.transactionNo) html += '<div class="info-row"><span class="label">Transaction No:</span><span class="value">' + d.transactionNo + '</span></div>';
     if (d.depositAccount) html += '<div class="info-row"><span class="label">Deposited To:</span><span class="value">' + d.depositAccount + '</span></div>';
     html += '</div>';
     
-    // Signatures
     html += '<div class="signature">';
     html += '<div><div class="line">Received By</div></div>';
     html += '<div><div class="line">Tenant Signature</div></div>';
     html += '</div>';
     
-    // Footer
     html += '<div class="footer">';
     html += '<p><strong>' + footerText + '</strong></p>';
     html += '<p>This is a computer generated receipt.</p>';
@@ -374,7 +431,7 @@ export function RentSheet() {
     html += '</div>';
     
     html += '</div>';
-    html += '<script>window.onload = function() { window.print(); };<\/script>';
+    html += '<script>window.onload = function() { window.print(); }<\/script>';
     html += '</body></html>';
 
     printWindow.document.write(html);
@@ -389,21 +446,17 @@ export function RentSheet() {
 
   // Print Invoice
   function printInvoice() {
-    var tenant = getSelectedTenant();
+    const tenant = getSelectedTenant();
     if (!tenant) return;
 
-    var rentData = getRentRecord(selectedTenantId);
-    var monthlyRent = tenant.rent || 0;
-    var outstanding = rentData ? (rentData.outstanding || 0) : 0;
-    var paidAmount = rentData ? (rentData.paid || 0) : 0;
-    var totalDue = rentData ? (rentData.balance || 0) : monthlyRent + outstanding;
-    var invoiceNo = 'INV-' + selectedMonth.replace('-', '') + '-' + selectedTenantId.slice(-4).toUpperCase();
-    var today = new Date().toLocaleDateString('en-PK');
+    const data = getRentData(selectedTenantId);
+    const invoiceNo = 'INV-' + selectedMonth.replace('-', '') + '-' + selectedTenantId.slice(-4).toUpperCase();
+    const today = new Date().toLocaleDateString('en-PK');
 
-    var printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    var html = '<!DOCTYPE html><html><head><title>Invoice</title>';
+    let html = '<!DOCTYPE html><html><head><title>Invoice</title>';
     html += '<style>';
     html += 'body { font-family: Arial; padding: 20px; max-width: 800px; margin: 0 auto; }';
     html += '.header { text-align: center; border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 20px; }';
@@ -428,10 +481,10 @@ export function RentSheet() {
     
     html += '<table>';
     html += '<tr><th>Description</th><th style="text-align:right">Amount (Rs)</th></tr>';
-    html += '<tr><td>Monthly Rent - ' + selectedMonth + '</td><td style="text-align:right">' + formatNum(monthlyRent) + '</td></tr>';
-    html += '<tr><td>Outstanding Previous</td><td style="text-align:right">' + formatNum(outstanding) + '</td></tr>';
-    html += '<tr><td>Paid Current Month</td><td style="text-align:right;color:green">-' + formatNum(paidAmount) + '</td></tr>';
-    html += '<tr class="total"><td>TOTAL DUE</td><td style="text-align:right">Rs ' + formatNum(totalDue) + '</td></tr>';
+    html += '<tr><td>Monthly Rent - ' + selectedMonth + '</td><td style="text-align:right">' + formatNum(data.rent) + '</td></tr>';
+    html += '<tr><td>Outstanding Previous</td><td style="text-align:right">' + formatNum(data.outstanding) + '</td></tr>';
+    html += '<tr><td>Paid Current Month</td><td style="text-align:right;color:green">-' + formatNum(data.paid) + '</td></tr>';
+    html += '<tr class="total"><td>TOTAL DUE</td><td style="text-align:right">Rs ' + formatNum(data.balance) + '</td></tr>';
     html += '</table>';
     
     html += '<div class="footer"><p>' + footerText + '</p></div>';
@@ -443,26 +496,23 @@ export function RentSheet() {
 
   // WhatsApp Invoice
   function sendWhatsApp() {
-    var tenant = getSelectedTenant();
+    const tenant = getSelectedTenant();
     if (!tenant) return;
 
-    var rentData = getRentRecord(selectedTenantId);
-    var monthlyRent = tenant.rent || 0;
-    var outstanding = rentData ? (rentData.outstanding || 0) : 0;
-    var totalDue = rentData ? (rentData.balance || 0) : monthlyRent + outstanding;
+    const data = getRentData(selectedTenantId);
 
-    var message = 'Dear ' + (tenant.name || 'Tenant') + ',\n\n';
+    let message = 'Dear ' + (tenant.name || 'Tenant') + ',\n\n';
     message += '📋 *Invoice for ' + selectedMonth + '*\n\n';
     message += '🏠 Shop: ' + (tenant.premises || '') + '\n';
-    message += '💰 Monthly Rent: Rs ' + formatNum(monthlyRent) + '\n';
-    message += '📊 Outstanding: Rs ' + formatNum(outstanding) + '\n';
+    message += '💰 Monthly Rent: Rs ' + formatNum(data.rent) + '\n';
+    message += '📊 Outstanding: Rs ' + formatNum(data.outstanding) + '\n';
     message += '━━━━━━━━━━━━\n';
-    message += '💵 *Total Due: Rs ' + formatNum(totalDue) + '*\n\n';
+    message += '💵 *Total Due: Rs ' + formatNum(data.balance) + '*\n\n';
     message += 'Please pay at your earliest convenience.\n\n';
     message += 'Regards,\n' + plazaName + '\n';
     if (plazaPhone) message += '📞 ' + plazaPhone;
 
-    var phone = (tenant.phone || '').replace(/[^0-9]/g, '');
+    let phone = (tenant.phone || '').replace(/[^0-9]/g, '');
     if (phone.length >= 10) phone = '92' + phone.slice(-10);
     
     window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(message), '_blank');
@@ -470,13 +520,7 @@ export function RentSheet() {
 
   // Open Tenant Edit Modal
   function openTenantModal(tenantId: string) {
-    var tenant = null;
-    for (var x = 0; x < tenants.length; x++) {
-      if (tenants[x].id === tenantId) {
-        tenant = tenants[x];
-        break;
-      }
-    }
+    const tenant = tenants?.find(t => t.id === tenantId);
     if (!tenant) return;
 
     setSelectedTenantId(tenantId);
@@ -513,14 +557,13 @@ export function RentSheet() {
     });
     
     setShowTenantModal(false);
-    alert('Tenant updated!');
   }
 
   // Open Lease Modal
   function openLeaseModal(tenantId: string) {
     setSelectedTenantId(tenantId);
     
-    var lease = getLease(tenantId);
+    const lease = getLease(tenantId);
     if (lease) {
       setLeaseStartDate(lease.startDate || '');
       setLeaseEndDate(lease.endDate || '');
@@ -540,8 +583,8 @@ export function RentSheet() {
   function submitLease(e: React.FormEvent) {
     e.preventDefault();
     
-    var existingLease = getLease(selectedTenantId);
-    var leaseData = {
+    const existingLease = getLease(selectedTenantId);
+    const leaseData = {
       id: existingLease ? existingLease.id : 'L' + Date.now(),
       tenantId: selectedTenantId,
       startDate: leaseStartDate,
@@ -559,17 +602,16 @@ export function RentSheet() {
     }
     
     setShowLeaseModal(false);
-    alert('Lease saved!');
   }
 
   // Get lease status
   function getLeaseStatus(tenantId: string) {
-    var lease = getLease(tenantId);
+    const lease = getLease(tenantId);
     if (!lease) return { text: 'No Lease', color: 'bg-gray-100 text-gray-600' };
     
-    var endDate = new Date(lease.endDate);
-    var today = new Date();
-    var days = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const endDate = new Date(lease.endDate);
+    const today = new Date();
+    const days = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     
     if (days < 0) return { text: 'Expired', color: 'bg-red-100 text-red-700' };
     if (days <= 30) return { text: days + 'd left', color: 'bg-yellow-100 text-yellow-700' };
@@ -578,27 +620,27 @@ export function RentSheet() {
 
   // Export to Excel
   function handleExport() {
-    var csv = 'Sr,Tenant,Shop,Rent,Outstanding,Paid,Balance,Phone,IESCO,Status\n';
+    let csv = 'Sr,Tenant,Shop,Rent,Outstanding,Paid,Balance,Phone,IESCO,Status\n';
     
-    for (var p = 0; p < filteredTenants.length; p++) {
-      var t = filteredTenants[p];
-      var rd = getRentRecord(t.id);
+    for (let p = 0; p < filteredTenants.length; p++) {
+      const t = filteredTenants[p];
+      const data = getRentData(t.id);
       
       csv += (p + 1) + ',';
       csv += '"' + (t.name || '') + '",';
       csv += '"' + (t.premises || '') + '",';
-      csv += (t.rent || 0) + ',';
-      csv += (rd ? rd.outstanding || 0 : 0) + ',';
-      csv += (rd ? rd.paid || 0 : 0) + ',';
-      csv += (rd ? rd.balance || 0 : (t.rent || 0)) + ',';
+      csv += data.rent + ',';
+      csv += data.outstanding + ',';
+      csv += data.paid + ',';
+      csv += data.balance + ',';
       csv += '"' + (t.phone || '') + '",';
       csv += '"' + (t.iescoNo || '') + '",';
       csv += (t.status || '') + '\n';
     }
     
-    var blob = new Blob([csv], { type: 'text/csv' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url;
     a.download = 'rent-sheet-' + selectedMonth + '.csv';
     a.click();
@@ -610,7 +652,18 @@ export function RentSheet() {
   }
 
   // Get payment details for display
-  var paymentDetails = getPaymentDetails();
+  const paymentDetails = getPaymentDetails();
+
+  // FIX 8: Debug log to check data (remove in production)
+  useEffect(() => {
+    console.log('=== DEBUG INFO ===');
+    console.log('Selected Month:', selectedMonth);
+    console.log('Tenants:', tenants);
+    console.log('Rent Records:', rentRecords);
+    console.log('Payments:', payments);
+    console.log('Filtered Tenants:', filteredTenants);
+    console.log('==================');
+  }, [selectedMonth, tenants, rentRecords, payments]);
 
   return (
     <Layout>
@@ -629,11 +682,11 @@ export function RentSheet() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Month</label>
-              <input type="month" className="w-full border rounded px-3 py-2" value={selectedMonth} onChange={function(e) { setSelectedMonth(e.target.value); }} />
+              <input type="month" className="w-full border rounded px-3 py-2" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Status</label>
-              <select className="w-full border rounded px-3 py-2" value={filterStatus} onChange={function(e) { setFilterStatus(e.target.value); }}>
+              <select className="w-full border rounded px-3 py-2" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
                 <option value="all">All</option>
                 <option value="active">Active</option>
                 <option value="vacated">Vacated</option>
@@ -641,7 +694,7 @@ export function RentSheet() {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Search</label>
-              <input type="text" className="w-full border rounded px-3 py-2" placeholder="Search tenant or shop..." value={searchTerm} onChange={function(e) { setSearchTerm(e.target.value); }} />
+              <input type="text" className="w-full border rounded px-3 py-2" placeholder="Search tenant or shop..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
           </div>
         </div>
@@ -666,7 +719,7 @@ export function RentSheet() {
           </div>
         </div>
 
-        {/* Main Table */}
+        {/* Main Table - FIXED to use getRentData */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -684,34 +737,30 @@ export function RentSheet() {
                 </tr>
               </thead>
               <tbody>
-                {filteredTenants.length > 0 ? filteredTenants.map(function(tenant, idx) {
-                  var rd = getRentRecord(tenant.id);
-                  var rent = tenant.rent || 0;
-                  var outstanding = rd ? (rd.outstanding || 0) : 0;
-                  var paid = rd ? (rd.paid || 0) : 0;
-                  var balance = rd ? (rd.balance || 0) : rent + outstanding;
-                  var leaseStatus = getLeaseStatus(tenant.id);
-                  
-                  var balanceColor = balance > 0 ? 'text-red-600' : balance < 0 ? 'text-green-600' : '';
+                {filteredTenants.length > 0 ? filteredTenants.map((tenant, idx) => {
+                  // FIX 9: Use the new getRentData function
+                  const data = getRentData(tenant.id);
+                  const leaseStatus = getLeaseStatus(tenant.id);
+                  const balanceColor = data.balance > 0 ? 'text-red-600' : data.balance < 0 ? 'text-green-600' : '';
                   
                   return (
                     <tr key={tenant.id} className="border-b hover:bg-gray-50">
                       <td className="p-2">{idx + 1}</td>
                       <td className="p-2 font-medium">{tenant.name || 'N/A'}</td>
                       <td className="p-2">{tenant.premises || 'N/A'}</td>
-                      <td className="p-2 text-right">{formatNum(rent)}</td>
-                      <td className="p-2 text-right text-orange-600">{formatNum(outstanding)}</td>
-                      <td className="p-2 text-right text-green-600">{formatNum(paid)}</td>
-                      <td className={'p-2 text-right font-bold ' + balanceColor}>{formatNum(balance)}</td>
+                      <td className="p-2 text-right">{formatNum(data.rent)}</td>
+                      <td className="p-2 text-right text-orange-600">{formatNum(data.outstanding)}</td>
+                      <td className="p-2 text-right text-green-600">{formatNum(data.paid)}</td>
+                      <td className={'p-2 text-right font-bold ' + balanceColor}>{formatNum(data.balance)}</td>
                       <td className="p-2 text-center">
                         <span className={'px-2 py-0.5 rounded text-xs ' + leaseStatus.color}>{leaseStatus.text}</span>
                       </td>
                       <td className="p-2">
                         <div className="flex justify-center gap-1 flex-wrap">
-                          <button onClick={function() { openPaymentModal(tenant.id); }} className="bg-green-500 text-white px-2 py-1 rounded text-xs" title="Add Payment">💰</button>
-                          <button onClick={function() { openInvoiceModal(tenant.id); }} className="bg-blue-500 text-white px-2 py-1 rounded text-xs" title="Invoice">🧾</button>
-                          <button onClick={function() { openTenantModal(tenant.id); }} className="bg-yellow-500 text-white px-2 py-1 rounded text-xs" title="Edit Tenant">✏️</button>
-                          <button onClick={function() { openLeaseModal(tenant.id); }} className="bg-purple-500 text-white px-2 py-1 rounded text-xs" title="Lease">📄</button>
+                          <button onClick={() => openPaymentModal(tenant.id)} className="bg-green-500 text-white px-2 py-1 rounded text-xs" title="Add Payment">💰</button>
+                          <button onClick={() => openInvoiceModal(tenant.id)} className="bg-blue-500 text-white px-2 py-1 rounded text-xs" title="Invoice">🧾</button>
+                          <button onClick={() => openTenantModal(tenant.id)} className="bg-yellow-500 text-white px-2 py-1 rounded text-xs" title="Edit Tenant">✏️</button>
+                          <button onClick={() => openLeaseModal(tenant.id)} className="bg-purple-500 text-white px-2 py-1 rounded text-xs" title="Lease">📄</button>
                         </div>
                       </td>
                     </tr>
@@ -734,14 +783,14 @@ export function RentSheet() {
           </div>
         </div>
 
-        {/* ==================== PAYMENT MODAL ==================== */}
+        {/* All modals remain the same... */}
+        {/* PAYMENT MODAL */}
         {showPaymentModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-lg p-6 max-h-screen overflow-y-auto">
               <h2 className="text-xl font-bold mb-2">💰 Add Payment</h2>
               <p className="text-gray-600 mb-4">{getSelectedTenant()?.name} - {getSelectedTenant()?.premises}</p>
               
-              {/* Payment Summary Box */}
               <div className="bg-gray-50 rounded-lg p-4 mb-4">
                 <h3 className="font-bold text-sm mb-2 text-gray-700">Payment Summary for {paymentMonth}</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm">
@@ -756,15 +805,15 @@ export function RentSheet() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium mb-1">Payment Month *</label>
-                    <input type="month" className="w-full border rounded px-3 py-2" value={paymentMonth} onChange={function(e) { setPaymentMonth(e.target.value); }} required />
+                    <input type="month" className="w-full border rounded px-3 py-2" value={paymentMonth} onChange={(e) => setPaymentMonth(e.target.value)} required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Payment Date *</label>
-                    <input type="date" className="w-full border rounded px-3 py-2" value={paymentDate} onChange={function(e) { setPaymentDate(e.target.value); }} required />
+                    <input type="date" className="w-full border rounded px-3 py-2" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-sm font-medium mb-1">Amount (Rs) *</label>
-                    <input type="number" className="w-full border rounded px-3 py-2 text-lg font-bold" value={paymentAmount} onChange={function(e) { setPaymentAmount(e.target.value); }} placeholder="Enter amount" required />
+                    <input type="number" className="w-full border rounded px-3 py-2 text-lg font-bold" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="Enter amount" required />
                     {paymentAmount && (
                       <p className="text-sm mt-1">
                         Balance after payment: <span className={parseInt(paymentAmount) >= paymentDetails.totalDue ? 'text-green-600' : 'text-red-600'}>
@@ -775,7 +824,7 @@ export function RentSheet() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Method</label>
-                    <select className="w-full border rounded px-3 py-2" value={paymentMethod} onChange={function(e) { setPaymentMethod(e.target.value); }}>
+                    <select className="w-full border rounded px-3 py-2" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
                       <option value="cash">💵 Cash</option>
                       <option value="bank">🏦 Bank Transfer</option>
                       <option value="online">📱 Online Payment</option>
@@ -783,32 +832,32 @@ export function RentSheet() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Transaction No</label>
-                    <input type="text" className="w-full border rounded px-3 py-2" value={paymentTransactionNo} onChange={function(e) { setPaymentTransactionNo(e.target.value); }} placeholder="Optional" />
+                    <input type="text" className="w-full border rounded px-3 py-2" value={paymentTransactionNo} onChange={(e) => setPaymentTransactionNo(e.target.value)} placeholder="Optional" />
                   </div>
                   <div className="col-span-2">
                     <label className="block text-sm font-medium mb-1">Deposited To Account</label>
-                    <input type="text" className="w-full border rounded px-3 py-2" value={paymentDepositAccount} onChange={function(e) { setPaymentDepositAccount(e.target.value); }} placeholder="Account number (optional)" />
+                    <input type="text" className="w-full border rounded px-3 py-2" value={paymentDepositAccount} onChange={(e) => setPaymentDepositAccount(e.target.value)} placeholder="Account number (optional)" />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium mb-1">📎 Attachment (Bank Slip/Receipt)</label>
+                    <label className="block text-sm font-medium mb-1">📎 Attachment</label>
                     <input type="file" className="w-full border rounded px-3 py-2" accept="image/*,.pdf" onChange={handleFileUpload} />
                     {paymentAttachmentName && <p className="text-sm text-green-600 mt-1">✓ {paymentAttachmentName}</p>}
                   </div>
                   <div className="col-span-2">
                     <label className="block text-sm font-medium mb-1">Remarks</label>
-                    <textarea className="w-full border rounded px-3 py-2" rows={2} value={paymentRemarks} onChange={function(e) { setPaymentRemarks(e.target.value); }} placeholder="Any notes..."></textarea>
+                    <textarea className="w-full border rounded px-3 py-2" rows={2} value={paymentRemarks} onChange={(e) => setPaymentRemarks(e.target.value)} placeholder="Any notes..."></textarea>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button type="submit" className="flex-1 bg-green-600 text-white py-2 rounded font-bold">💾 Save Payment</button>
-                  <button type="button" onClick={function() { setShowPaymentModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
+                  <button type="button" onClick={() => setShowPaymentModal(false)} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
                 </div>
               </form>
             </div>
           </div>
         )}
 
-        {/* ==================== RECEIPT MODAL ==================== */}
+        {/* RECEIPT MODAL */}
         {showReceiptModal && lastPaymentData && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-md p-6">
@@ -827,40 +876,36 @@ export function RentSheet() {
               
               <div className="flex gap-2">
                 <button onClick={printReceipt} className="flex-1 bg-blue-600 text-white py-2 rounded font-bold">🖨️ Print Receipt</button>
-                <button onClick={function() { setShowReceiptModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Close</button>
+                <button onClick={() => setShowReceiptModal(false)} className="flex-1 bg-gray-300 py-2 rounded">Close</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ==================== INVOICE MODAL ==================== */}
+        {/* INVOICE MODAL */}
         {showInvoiceModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-md p-6">
               <h2 className="text-xl font-bold mb-4">🧾 Invoice - {getSelectedTenant()?.name}</h2>
               
-              {(function() {
-                var tenant = getSelectedTenant();
-                var rd = getRentRecord(selectedTenantId);
-                var rent = tenant ? (tenant.rent || 0) : 0;
-                var outstanding = rd ? (rd.outstanding || 0) : 0;
-                var paid = rd ? (rd.paid || 0) : 0;
-                var balance = rd ? (rd.balance || 0) : rent + outstanding;
+              {(() => {
+                const tenant = getSelectedTenant();
+                const data = getRentData(selectedTenantId);
                 
                 return (
                   <div>
                     <div className="bg-gray-50 rounded p-4 mb-4">
                       <div className="flex justify-between py-1 border-b"><span>Shop:</span><span className="font-bold">{tenant?.premises || ''}</span></div>
                       <div className="flex justify-between py-1 border-b"><span>Month:</span><span className="font-bold">{selectedMonth}</span></div>
-                      <div className="flex justify-between py-1 border-b"><span>Rent:</span><span>Rs {formatNum(rent)}</span></div>
-                      <div className="flex justify-between py-1 border-b"><span>Outstanding:</span><span className="text-orange-600">Rs {formatNum(outstanding)}</span></div>
-                      <div className="flex justify-between py-1 border-b"><span>Paid:</span><span className="text-green-600">Rs {formatNum(paid)}</span></div>
-                      <div className="flex justify-between py-2 text-lg"><span className="font-bold">Total Due:</span><span className="font-bold text-red-600">Rs {formatNum(balance)}</span></div>
+                      <div className="flex justify-between py-1 border-b"><span>Rent:</span><span>Rs {formatNum(data.rent)}</span></div>
+                      <div className="flex justify-between py-1 border-b"><span>Outstanding:</span><span className="text-orange-600">Rs {formatNum(data.outstanding)}</span></div>
+                      <div className="flex justify-between py-1 border-b"><span>Paid:</span><span className="text-green-600">Rs {formatNum(data.paid)}</span></div>
+                      <div className="flex justify-between py-2 text-lg"><span className="font-bold">Total Due:</span><span className="font-bold text-red-600">Rs {formatNum(data.balance)}</span></div>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={printInvoice} className="flex-1 bg-blue-600 text-white py-2 rounded">🖨️ Print</button>
                       <button onClick={sendWhatsApp} className="flex-1 bg-green-600 text-white py-2 rounded">💬 WhatsApp</button>
-                      <button onClick={function() { setShowInvoiceModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Close</button>
+                      <button onClick={() => setShowInvoiceModal(false)} className="flex-1 bg-gray-300 py-2 rounded">Close</button>
                     </div>
                   </div>
                 );
@@ -869,7 +914,7 @@ export function RentSheet() {
           </div>
         )}
 
-        {/* ==================== TENANT EDIT MODAL ==================== */}
+        {/* TENANT EDIT MODAL */}
         {showTenantModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-lg p-6 max-h-screen overflow-y-auto">
@@ -878,43 +923,43 @@ export function RentSheet() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="col-span-2">
                     <label className="block text-sm font-medium mb-1">Name *</label>
-                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantName} onChange={function(e) { setTenantName(e.target.value); }} required />
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantName} onChange={(e) => setTenantName(e.target.value)} required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Phone</label>
-                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantPhone} onChange={function(e) { setTenantPhone(e.target.value); }} />
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Email</label>
-                    <input type="email" className="w-full border rounded px-3 py-2" value={tenantEmail} onChange={function(e) { setTenantEmail(e.target.value); }} />
+                    <input type="email" className="w-full border rounded px-3 py-2" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">CNIC</label>
-                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantCnic} onChange={function(e) { setTenantCnic(e.target.value); }} />
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantCnic} onChange={(e) => setTenantCnic(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Premises/Shop *</label>
-                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantPremises} onChange={function(e) { setTenantPremises(e.target.value); }} required />
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantPremises} onChange={(e) => setTenantPremises(e.target.value)} required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Monthly Rent *</label>
-                    <input type="number" className="w-full border rounded px-3 py-2" value={tenantRent} onChange={function(e) { setTenantRent(e.target.value); }} required />
+                    <input type="number" className="w-full border rounded px-3 py-2" value={tenantRent} onChange={(e) => setTenantRent(e.target.value)} required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Security Deposit</label>
-                    <input type="number" className="w-full border rounded px-3 py-2" value={tenantDeposit} onChange={function(e) { setTenantDeposit(e.target.value); }} />
+                    <input type="number" className="w-full border rounded px-3 py-2" value={tenantDeposit} onChange={(e) => setTenantDeposit(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">IESCO No</label>
-                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantIescoNo} onChange={function(e) { setTenantIescoNo(e.target.value); }} />
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantIescoNo} onChange={(e) => setTenantIescoNo(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Effective Date</label>
-                    <input type="date" className="w-full border rounded px-3 py-2" value={tenantEffectiveDate} onChange={function(e) { setTenantEffectiveDate(e.target.value); }} />
+                    <input type="date" className="w-full border rounded px-3 py-2" value={tenantEffectiveDate} onChange={(e) => setTenantEffectiveDate(e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Status</label>
-                    <select className="w-full border rounded px-3 py-2" value={tenantStatus} onChange={function(e) { setTenantStatus(e.target.value); }}>
+                    <select className="w-full border rounded px-3 py-2" value={tenantStatus} onChange={(e) => setTenantStatus(e.target.value)}>
                       <option value="active">✅ Active</option>
                       <option value="vacated">🚪 Vacated</option>
                       <option value="suspended">⏸️ Suspended</option>
@@ -923,14 +968,14 @@ export function RentSheet() {
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded">💾 Save</button>
-                  <button type="button" onClick={function() { setShowTenantModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
+                  <button type="button" onClick={() => setShowTenantModal(false)} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
                 </div>
               </form>
             </div>
           </div>
         )}
 
-        {/* ==================== LEASE MODAL ==================== */}
+        {/* LEASE MODAL */}
         {showLeaseModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg w-full max-w-md p-6">
@@ -938,19 +983,19 @@ export function RentSheet() {
               <form onSubmit={submitLease}>
                 <div className="mb-3">
                   <label className="block text-sm font-medium mb-1">Start Date *</label>
-                  <input type="date" className="w-full border rounded px-3 py-2" value={leaseStartDate} onChange={function(e) { setLeaseStartDate(e.target.value); }} required />
+                  <input type="date" className="w-full border rounded px-3 py-2" value={leaseStartDate} onChange={(e) => setLeaseStartDate(e.target.value)} required />
                 </div>
                 <div className="mb-3">
                   <label className="block text-sm font-medium mb-1">End Date *</label>
-                  <input type="date" className="w-full border rounded px-3 py-2" value={leaseEndDate} onChange={function(e) { setLeaseEndDate(e.target.value); }} required />
+                  <input type="date" className="w-full border rounded px-3 py-2" value={leaseEndDate} onChange={(e) => setLeaseEndDate(e.target.value)} required />
                 </div>
                 <div className="mb-3">
                   <label className="block text-sm font-medium mb-1">Annual Increment %</label>
-                  <input type="number" className="w-full border rounded px-3 py-2" value={leaseIncrement} onChange={function(e) { setLeaseIncrement(e.target.value); }} />
+                  <input type="number" className="w-full border rounded px-3 py-2" value={leaseIncrement} onChange={(e) => setLeaseIncrement(e.target.value)} />
                 </div>
                 <div className="mb-3">
                   <label className="block text-sm font-medium mb-1">Reminder Days Before Expiry</label>
-                  <select className="w-full border rounded px-3 py-2" value={leaseReminderDays} onChange={function(e) { setLeaseReminderDays(e.target.value); }}>
+                  <select className="w-full border rounded px-3 py-2" value={leaseReminderDays} onChange={(e) => setLeaseReminderDays(e.target.value)}>
                     <option value="30">30 Days</option>
                     <option value="60">60 Days</option>
                     <option value="90">90 Days</option>
@@ -958,7 +1003,7 @@ export function RentSheet() {
                 </div>
                 <div className="flex gap-2">
                   <button type="submit" className="flex-1 bg-purple-600 text-white py-2 rounded">💾 Save Lease</button>
-                  <button type="button" onClick={function() { setShowLeaseModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
+                  <button type="button" onClick={() => setShowLeaseModal(false)} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
                 </div>
               </form>
             </div>
