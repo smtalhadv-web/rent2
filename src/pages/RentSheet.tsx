@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useApp } from '../context/AppContext';
@@ -664,8 +665,14 @@ export function RentSheet() {
     console.log('Filtered Tenants:', filteredTenants);
     console.log('==================');
   }, [selectedMonth, tenants, rentRecords, payments]);
+=======
+// Importing necessary modules
+import React from 'react';
+>>>>>>> c383bee2de0860e62bcd53877d9a7ef0629fcb6b
 
+const RentSheet = ({ tenants }) => {
   return (
+<<<<<<< HEAD
     <Layout>
       <div className="p-4 md:p-6">
         {/* Header */}
@@ -1012,5 +1019,30 @@ export function RentSheet() {
 
       </div>
     </Layout>
+=======
+    <div>
+      <h1>Rent Sheet</h1>
+      <table>
+        <thead>
+          <tr>
+            <th>Tenant</th>
+            <th>Monthly Rent</th>
+            <th>Outstanding Rent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tenants.map((tenant, index) => (
+            <tr key={index}>
+              <td>{tenant.name}</td>
+              <td>{tenant.monthlyRent}</td>
+              <td>{tenant.outstandingRent}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+>>>>>>> c383bee2de0860e62bcd53877d9a7ef0629fcb6b
   );
-}
+};
+
+export default RentSheet;
