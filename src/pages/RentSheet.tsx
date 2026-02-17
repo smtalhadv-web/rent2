@@ -826,4 +826,146 @@ export function RentSheet() {
               </div>
               
               <div className="flex gap-2">
-                <button onClick={printReceipt} className="flex-
+                <button onClick={printReceipt} className="flex-1 bg-blue-600 text-white py-2 rounded font-bold">🖨️ Print Receipt</button>
+                <button onClick={function() { setShowReceiptModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== INVOICE MODAL ==================== */}
+        {showInvoiceModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6">
+              <h2 className="text-xl font-bold mb-4">🧾 Invoice - {getSelectedTenant()?.name}</h2>
+              
+              {(function() {
+                var tenant = getSelectedTenant();
+                var rd = getRentRecord(selectedTenantId);
+                var rent = tenant ? (tenant.rent || 0) : 0;
+                var outstanding = rd ? (rd.outstanding || 0) : 0;
+                var paid = rd ? (rd.paid || 0) : 0;
+                var balance = rd ? (rd.balance || 0) : rent + outstanding;
+                
+                return (
+                  <div>
+                    <div className="bg-gray-50 rounded p-4 mb-4">
+                      <div className="flex justify-between py-1 border-b"><span>Shop:</span><span className="font-bold">{tenant?.premises || ''}</span></div>
+                      <div className="flex justify-between py-1 border-b"><span>Month:</span><span className="font-bold">{selectedMonth}</span></div>
+                      <div className="flex justify-between py-1 border-b"><span>Rent:</span><span>Rs {formatNum(rent)}</span></div>
+                      <div className="flex justify-between py-1 border-b"><span>Outstanding:</span><span className="text-orange-600">Rs {formatNum(outstanding)}</span></div>
+                      <div className="flex justify-between py-1 border-b"><span>Paid:</span><span className="text-green-600">Rs {formatNum(paid)}</span></div>
+                      <div className="flex justify-between py-2 text-lg"><span className="font-bold">Total Due:</span><span className="font-bold text-red-600">Rs {formatNum(balance)}</span></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={printInvoice} className="flex-1 bg-blue-600 text-white py-2 rounded">🖨️ Print</button>
+                      <button onClick={sendWhatsApp} className="flex-1 bg-green-600 text-white py-2 rounded">💬 WhatsApp</button>
+                      <button onClick={function() { setShowInvoiceModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Close</button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* ==================== TENANT EDIT MODAL ==================== */}
+        {showTenantModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-lg p-6 max-h-screen overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4">✏️ Edit Tenant</h2>
+              <form onSubmit={submitTenantEdit}>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium mb-1">Name *</label>
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantName} onChange={function(e) { setTenantName(e.target.value); }} required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Phone</label>
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantPhone} onChange={function(e) { setTenantPhone(e.target.value); }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Email</label>
+                    <input type="email" className="w-full border rounded px-3 py-2" value={tenantEmail} onChange={function(e) { setTenantEmail(e.target.value); }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">CNIC</label>
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantCnic} onChange={function(e) { setTenantCnic(e.target.value); }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Premises/Shop *</label>
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantPremises} onChange={function(e) { setTenantPremises(e.target.value); }} required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Monthly Rent *</label>
+                    <input type="number" className="w-full border rounded px-3 py-2" value={tenantRent} onChange={function(e) { setTenantRent(e.target.value); }} required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Security Deposit</label>
+                    <input type="number" className="w-full border rounded px-3 py-2" value={tenantDeposit} onChange={function(e) { setTenantDeposit(e.target.value); }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">IESCO No</label>
+                    <input type="text" className="w-full border rounded px-3 py-2" value={tenantIescoNo} onChange={function(e) { setTenantIescoNo(e.target.value); }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Effective Date</label>
+                    <input type="date" className="w-full border rounded px-3 py-2" value={tenantEffectiveDate} onChange={function(e) { setTenantEffectiveDate(e.target.value); }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Status</label>
+                    <select className="w-full border rounded px-3 py-2" value={tenantStatus} onChange={function(e) { setTenantStatus(e.target.value); }}>
+                      <option value="active">✅ Active</option>
+                      <option value="vacated">🚪 Vacated</option>
+                      <option value="suspended">⏸️ Suspended</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded">💾 Save</button>
+                  <button type="button" onClick={function() { setShowTenantModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== LEASE MODAL ==================== */}
+        {showLeaseModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6">
+              <h2 className="text-xl font-bold mb-4">📄 Lease - {getSelectedTenant()?.name}</h2>
+              <form onSubmit={submitLease}>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium mb-1">Start Date *</label>
+                  <input type="date" className="w-full border rounded px-3 py-2" value={leaseStartDate} onChange={function(e) { setLeaseStartDate(e.target.value); }} required />
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium mb-1">End Date *</label>
+                  <input type="date" className="w-full border rounded px-3 py-2" value={leaseEndDate} onChange={function(e) { setLeaseEndDate(e.target.value); }} required />
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium mb-1">Annual Increment %</label>
+                  <input type="number" className="w-full border rounded px-3 py-2" value={leaseIncrement} onChange={function(e) { setLeaseIncrement(e.target.value); }} />
+                </div>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium mb-1">Reminder Days Before Expiry</label>
+                  <select className="w-full border rounded px-3 py-2" value={leaseReminderDays} onChange={function(e) { setLeaseReminderDays(e.target.value); }}>
+                    <option value="30">30 Days</option>
+                    <option value="60">60 Days</option>
+                    <option value="90">90 Days</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" className="flex-1 bg-purple-600 text-white py-2 rounded">💾 Save Lease</button>
+                  <button type="button" onClick={function() { setShowLeaseModal(false); }} className="flex-1 bg-gray-300 py-2 rounded">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </Layout>
+  );
+}
