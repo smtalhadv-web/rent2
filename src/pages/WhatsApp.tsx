@@ -1,232 +1,195 @@
-import { useState, useMemo } from 'react';
-import { MessageCircle, Copy, ExternalLink, Phone, AlertCircle, Clock, CheckCircle } from 'lucide-react';
-import { format, parseISO, differenceInDays } from 'date-fns';
-import { useApp } from '../context/AppContext';
+import { useState } from 'react';
 import { Layout } from '../components/Layout';
-
-type ReminderType = 'rent' | 'overdue' | 'lease';
+import { useApp } from '../context/AppContext';
 
 export function WhatsApp() {
-  const { tenants, leases, rentRecords, getWhatsAppMessage, settings } = useApp();
-  const [reminderType, setReminderType] = useState<ReminderType>('rent');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { tenants, rentRecords, settings } = useApp();
+  const [selectedMonth, setSelectedMonth] = useState('2026-02');
+  const [filterType, setFilterType] = useState('outstanding');
+  const [copiedId, setCopiedId] = useState('');
 
-  const currentMonthYear = format(new Date(), 'yyyy-MM');
+  var plazaName = (settings && settings.plazaName) || 'Plaza Management';
 
-  const tenantsWithData = useMemo(() => {
-    const activeTenants = tenants.filter((t) => t.status === 'active');
+  function formatNum(num: number) {
+    if (!num || isNaN(num)) return '0';
+    return num.toLocaleString();
+  }
 
-    return activeTenants.map((tenant) => {
-      const currentRecord = rentRecords.find(
-        (r) => r.tenantId === tenant.id && r.monthYear === currentMonthYear
-      );
-      const lease = leases.find((l) => l.tenantId === tenant.id);
-      const daysToExpiry = lease ? differenceInDays(parseISO(lease.endDate), new Date()) : null;
+  // Get tenants with balances
+  var tenantsWithData: Array<{
+    id: string;
+    name: string;
+    phone: string;
+    premises: string;
+    rent: number;
+    outstanding: number;
+    balance: number;
+  }> = [];
 
-      return {
-        tenant,
-        balance: currentRecord?.balance || 0,
-        isPending: (currentRecord?.balance || 0) > 0,
-        lease,
-        daysToExpiry,
-        isLeaseExpiring: daysToExpiry !== null && daysToExpiry > 0 && daysToExpiry <= 60,
-      };
-    });
-  }, [tenants, rentRecords, leases, currentMonthYear]);
-
-  const filteredTenants = useMemo(() => {
-    switch (reminderType) {
-      case 'rent':
-        return tenantsWithData.filter((t) => t.isPending);
-      case 'overdue':
-        return tenantsWithData.filter((t) => t.balance > t.tenant.monthlyRent);
-      case 'lease':
-        return tenantsWithData.filter((t) => t.isLeaseExpiring);
-      default:
-        return tenantsWithData;
+  if (tenants && tenants.length > 0) {
+    for (var i = 0; i < tenants.length; i++) {
+      var t = tenants[i];
+      if (!t || t.status !== 'active') continue;
+      
+      var rentRecord = null;
+      if (rentRecords && rentRecords.length > 0) {
+        for (var j = 0; j < rentRecords.length; j++) {
+          if (rentRecords[j] && rentRecords[j].tenantId === t.id && rentRecords[j].monthYear === selectedMonth) {
+            rentRecord = rentRecords[j];
+            break;
+          }
+        }
+      }
+      
+      var rent = t.rent || 0;
+      var outstanding = rentRecord ? (rentRecord.outstanding || 0) : 0;
+      var balance = rentRecord ? (rentRecord.balance || 0) : rent + outstanding;
+      
+      if (filterType === 'outstanding' && balance <= 0) continue;
+      if (filterType === 'all' && !t.phone) continue;
+      
+      tenantsWithData.push({
+        id: t.id,
+        name: t.name || 'Unknown',
+        phone: t.phone || '',
+        premises: t.premises || '',
+        rent: rent,
+        outstanding: outstanding,
+        balance: balance,
+      });
     }
-  }, [tenantsWithData, reminderType]);
+  }
 
-  const handleCopyMessage = (tenantId: string) => {
-    const message = getWhatsAppMessage(tenantId, reminderType);
+  function generateMessage(tenant: typeof tenantsWithData[0]) {
+    var message = 'Dear ' + tenant.name + ',\n\n';
+    message += '📋 *Rent Reminder for ' + selectedMonth + '*\n\n';
+    message += '🏠 Shop: ' + tenant.premises + '\n';
+    message += '💰 Monthly Rent: Rs ' + formatNum(tenant.rent) + '\n';
+    if (tenant.outstanding > 0) {
+      message += '📊 Previous Outstanding: Rs ' + formatNum(tenant.outstanding) + '\n';
+    }
+    message += '━━━━━━━━━━━━\n';
+    message += '💵 *Total Due: Rs ' + formatNum(tenant.balance) + '*\n\n';
+    message += 'Please pay at your earliest convenience.\n\n';
+    message += 'Regards,\n' + plazaName;
+    return message;
+  }
+
+  function copyMessage(tenant: typeof tenantsWithData[0]) {
+    var message = generateMessage(tenant);
     navigator.clipboard.writeText(message);
-    setCopiedId(tenantId);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+    setCopiedId(tenant.id);
+    setTimeout(function() { setCopiedId(''); }, 2000);
+  }
 
-  const handleOpenWhatsApp = (tenantId: string) => {
-    const tenant = tenants.find((t) => t.id === tenantId);
-    const message = getWhatsAppMessage(tenantId, reminderType);
-    if (tenant) {
-      const phone = tenant.phone.replace(/[^0-9]/g, '');
-      const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-      window.open(url, '_blank');
+  function openWhatsApp(tenant: typeof tenantsWithData[0]) {
+    var message = generateMessage(tenant);
+    var phone = (tenant.phone || '').replace(/[^0-9]/g, '');
+    if (phone.length >= 10) {
+      phone = '92' + phone.slice(-10);
     }
-  };
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(message), '_blank');
+  }
 
-  const reminderCards = [
-    {
-      type: 'rent' as ReminderType,
-      title: 'Rent Due Reminders',
-      description: 'Send reminder for pending rent payments',
-      icon: AlertCircle,
-      color: 'bg-amber-500',
-      count: tenantsWithData.filter((t) => t.isPending).length,
-    },
-    {
-      type: 'overdue' as ReminderType,
-      title: 'Overdue Reminders',
-      description: 'Send reminder for outstanding balances',
-      icon: AlertCircle,
-      color: 'bg-red-500',
-      count: tenantsWithData.filter((t) => t.balance > t.tenant.monthlyRent).length,
-    },
-    {
-      type: 'lease' as ReminderType,
-      title: 'Lease Expiry Reminders',
-      description: 'Notify tenants about expiring leases',
-      icon: Clock,
-      color: 'bg-blue-500',
-      count: tenantsWithData.filter((t) => t.isLeaseExpiring).length,
-    },
-  ];
+  function sendToAll() {
+    if (tenantsWithData.length === 0) return;
+    alert('Opening WhatsApp for ' + tenantsWithData.length + ' tenants. Please send each message manually.');
+    for (var k = 0; k < tenantsWithData.length; k++) {
+      setTimeout(function(tenant) {
+        openWhatsApp(tenant);
+      }, k * 2000, tenantsWithData[k]);
+    }
+  }
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">WhatsApp Reminders</h1>
-            <p className="text-gray-500 mt-1">Send rent and lease reminders via WhatsApp</p>
+      <div className="p-4 md:p-6">
+        <h1 className="text-2xl font-bold text-gray-800 mb-6">💬 WhatsApp Reminders</h1>
+
+        {/* Filters */}
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Month</label>
+              <input
+                type="month"
+                className="w-full border rounded-lg px-3 py-2"
+                value={selectedMonth}
+                onChange={function(e) { setSelectedMonth(e.target.value); }}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Filter</label>
+              <select
+                className="w-full border rounded-lg px-3 py-2"
+                value={filterType}
+                onChange={function(e) { setFilterType(e.target.value); }}
+              >
+                <option value="outstanding">Outstanding Only</option>
+                <option value="all">All Active Tenants</option>
+              </select>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={sendToAll}
+                disabled={tenantsWithData.length === 0}
+                className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+              >
+                📤 Send to All ({tenantsWithData.length})
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Reminder Type Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {reminderCards.map((card) => (
-            <button
-              key={card.type}
-              onClick={() => setReminderType(card.type)}
-              className={`p-6 rounded-xl border-2 transition-all text-left ${
-                reminderType === card.type
-                  ? 'border-indigo-500 bg-indigo-50'
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-lg ${card.color}`}>
-                  <card.icon className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-2xl font-bold text-gray-900">{card.count}</span>
-              </div>
-              <h3 className="font-semibold text-gray-900">{card.title}</h3>
-              <p className="text-sm text-gray-500 mt-1">{card.description}</p>
-            </button>
-          ))}
-        </div>
-
-        {/* Message Template */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Message Template</h3>
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-gray-700 whitespace-pre-wrap">{settings.whatsappTemplate}</p>
-          </div>
-          <p className="text-sm text-gray-500 mt-2">
-            Variables: {'{{tenant}}'}, {'{{month}}'}, {'{{balance}}'} will be replaced with actual values
+        {/* Summary */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <p className="text-yellow-800">
+            📌 <strong>{tenantsWithData.length}</strong> tenants with outstanding balance for {selectedMonth}
           </p>
         </div>
 
         {/* Tenants List */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {reminderType === 'rent' && 'Tenants with Pending Rent'}
-              {reminderType === 'overdue' && 'Tenants with Overdue Balances'}
-              {reminderType === 'lease' && 'Tenants with Expiring Leases'}
-            </h3>
-          </div>
-          <div className="divide-y divide-gray-200">
-            {filteredTenants.map(({ tenant, balance, daysToExpiry }) => {
-              const message = getWhatsAppMessage(tenant.id, reminderType);
-              return (
-                <div key={tenant.id} className="p-4 sm:p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                        <MessageCircle className="w-6 h-6 text-green-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">{tenant.name}</h4>
-                        <p className="text-sm text-gray-500">{tenant.premises}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Phone className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-600">{tenant.phone}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:items-end gap-2">
-                      {reminderType !== 'lease' ? (
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">Outstanding</p>
-                          <p className="text-xl font-bold text-red-600">
-                            Rs {balance.toLocaleString()}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-right">
-                          <p className="text-sm text-gray-500">Lease Expires</p>
-                          <p className="text-xl font-bold text-amber-600">{daysToExpiry} days</p>
-                        </div>
-                      )}
+        <div className="space-y-4">
+          {tenantsWithData.length > 0 ? tenantsWithData.map(function(tenant) {
+            return (
+              <div key={tenant.id} className="bg-white rounded-lg shadow p-4">
+                <div className="flex flex-wrap justify-between items-start gap-4">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg">{tenant.name}</h3>
+                    <p className="text-gray-600">🏠 {tenant.premises} | 📞 {tenant.phone || 'No phone'}</p>
+                    <div className="mt-2 flex gap-4 text-sm">
+                      <span>Rent: <strong>Rs {formatNum(tenant.rent)}</strong></span>
+                      <span className="text-orange-600">Outstanding: <strong>Rs {formatNum(tenant.outstanding)}</strong></span>
+                      <span className="text-red-600">Balance: <strong>Rs {formatNum(tenant.balance)}</strong></span>
                     </div>
                   </div>
-
-                  <div className="mt-4 bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-700">{message}</p>
-                  </div>
-
-                  <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => handleCopyMessage(tenant.id)}
-                      className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                        copiedId === tenant.id
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      onClick={function() { copyMessage(tenant); }}
+                      className="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 text-sm"
                     >
-                      {copiedId === tenant.id ? (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          Copied!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          Copy Message
-                        </>
-                      )}
+                      {copiedId === tenant.id ? '✅ Copied!' : '📋 Copy'}
                     </button>
                     <button
-                      onClick={() => handleOpenWhatsApp(tenant.id)}
-                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      onClick={function() { openWhatsApp(tenant); }}
+                      disabled={!tenant.phone}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 disabled:bg-gray-400 text-sm"
                     >
-                      <ExternalLink className="w-4 h-4" />
-                      Open WhatsApp
+                      💬 WhatsApp
                     </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-          {filteredTenants.length === 0 && (
-            <div className="text-center py-12">
-              <CheckCircle className="w-16 h-16 text-green-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">All Clear!</h3>
-              <p className="text-gray-500">
-                {reminderType === 'rent' && 'No tenants with pending rent payments'}
-                {reminderType === 'overdue' && 'No tenants with overdue balances'}
-                {reminderType === 'lease' && 'No leases expiring within 60 days'}
-              </p>
+                
+                {/* Message Preview */}
+                <div className="mt-3 bg-gray-50 rounded p-3 text-sm">
+                  <pre className="whitespace-pre-wrap font-sans text-gray-700">{generateMessage(tenant)}</pre>
+                </div>
+              </div>
+            );
+          }) : (
+            <div className="bg-gray-50 rounded-lg p-8 text-center text-gray-500">
+              <p className="text-4xl mb-4">✅</p>
+              <p>No tenants with outstanding balance!</p>
             </div>
           )}
         </div>
