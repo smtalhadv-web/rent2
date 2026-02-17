@@ -31,10 +31,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-gray-100">
       {/* Mobile Header */}
       <div className="lg:hidden bg-blue-600 text-white p-4 flex items-center justify-between">
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="text-2xl"
-        >
+        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-2xl">
           ☰
         </button>
         <h1 className="font-bold">{settings.plazaName}</h1>
@@ -46,7 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <aside
           className={`
             fixed lg:static inset-y-0 left-0 z-50
-            w-64 bg-blue-800 text-white
+            w-64 bg-blue-800 text-white min-h-screen
             transform transition-transform duration-300
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}
@@ -64,7 +61,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Navigation */}
-          <nav className="p-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+          <nav className="p-2">
             {menuItems.map((item) => (
               <Link
                 key={item.path}
@@ -86,7 +83,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Logout */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-blue-700">
+          <div className="p-4 border-t border-blue-700 mt-4">
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-300 hover:bg-red-600 hover:text-white transition-colors"
@@ -106,7 +103,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 min-h-screen lg:ml-0">
+        <main className="flex-1 min-h-screen">
           {children}
         </main>
       </div>
