@@ -15,7 +15,7 @@ export function Ledger() {
 
   const tenantPayments = payments
     .filter(function(p) { return p.tenantId === selectedTenant; })
-    .sort(function(a, b) { return new Date(a.date).getTime() - new Date(b.date).getTime(); });
+    .sort(function(a, b) { return new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime(); });
 
   const handlePrint = function() {
     window.print();
@@ -25,7 +25,7 @@ export function Ledger() {
     if (!tenant) return;
     let csv = 'Month,Rent,Outstanding,Paid,Balance\n';
     tenantRentRecords.forEach(function(r) {
-      csv += r.monthYear + ',' + r.rent + ',' + r.outstanding + ',' + r.paid + ',' + r.balance + '\n';
+      csv += r.monthYear + ',' + r.rent + ',' + r.outstandingPrevious + ',' + r.paid + ',' + r.balance + '\n';
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -79,7 +79,7 @@ export function Ledger() {
             <div className="p-4 border-b bg-gray-50">
               <h2 className="text-xl font-bold">{tenant.name}</h2>
               <p className="text-gray-600">Shop: {tenant.premises} | Phone: {tenant.phone}</p>
-              <p className="text-gray-600">Monthly Rent: Rs {tenant.rent.toLocaleString()}</p>
+              <p className="text-gray-600">Monthly Rent: Rs {tenant.monthlyRent.toLocaleString()}</p>
             </div>
 
             <div className="p-4">
@@ -101,7 +101,7 @@ export function Ledger() {
                         <tr key={r.id} className="border-b">
                           <td className="p-3 font-medium">{r.monthYear}</td>
                           <td className="p-3 text-right">{r.rent.toLocaleString()}</td>
-                          <td className="p-3 text-right text-orange-600">{r.outstanding.toLocaleString()}</td>
+                          <td className="p-3 text-right text-orange-600">{r.outstandingPrevious.toLocaleString()}</td>
                           <td className="p-3 text-right text-green-600">{r.paid.toLocaleString()}</td>
                           <td className={r.balance > 0 ? 'p-3 text-right font-bold text-red-600' : 'p-3 text-right font-bold text-green-600'}>
                             {r.balance.toLocaleString()}
@@ -134,9 +134,9 @@ export function Ledger() {
                     {tenantPayments.length > 0 ? tenantPayments.map(function(p) {
                       return (
                         <tr key={p.id} className="border-b">
-                          <td className="p-3">{new Date(p.date).toLocaleDateString()}</td>
+                          <td className="p-3">{new Date(p.paymentDate).toLocaleDateString()}</td>
                           <td className="p-3 text-right text-green-600 font-bold">Rs {p.amount.toLocaleString()}</td>
-                          <td className="p-3">{p.method}</td>
+                          <td className="p-3">{p.paymentMethod}</td>
                           <td className="p-3">{p.transactionNo || '-'}</td>
                         </tr>
                       );
