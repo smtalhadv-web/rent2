@@ -25,11 +25,10 @@ export function Payments() {
     e.preventDefault();
     
     addPayment({
-      id: 'P' + Date.now(),
       tenantId: tenantId,
       amount: parseInt(amount),
-      date: paymentDate,
-      method: method as 'cash' | 'bank' | 'online',
+      paymentDate: paymentDate,
+      paymentMethod: method as 'cash' | 'bank' | 'online',
       transactionNo: transactionNo,
       depositedAccount: depositAccount,
       monthYear: paymentMonth,
@@ -89,10 +88,10 @@ export function Payments() {
     html += '<div class="title">RECEIPT</div>';
     html += '<div class="row"><span>Receipt No:</span><span><strong>' + payment.id + '</strong></span></div>';
     html += '<div class="row"><span>Payment Month:</span><span><strong>' + pMonth + '</strong></span></div>';
-    html += '<div class="row"><span>Payment Date:</span><span><strong>' + payment.date + '</strong></span></div>';
+    html += '<div class="row"><span>Payment Date:</span><span><strong>' + payment.paymentDate + '</strong></span></div>';
     html += '<div class="row"><span>Tenant:</span><span><strong>' + tenantName + '</strong></span></div>';
     html += '<div class="row"><span>Shop:</span><span><strong>' + premises + '</strong></span></div>';
-    html += '<div class="row"><span>Method:</span><span><strong>' + (payment.method || 'cash').toUpperCase() + '</strong></span></div>';
+    html += '<div class="row"><span>Method:</span><span><strong>' + (payment.paymentMethod || 'cash').toUpperCase() + '</strong></span></div>';
     if (payment.transactionNo) {
       html += '<div class="row"><span>Transaction #:</span><span><strong>' + payment.transactionNo + '</strong></span></div>';
     }
@@ -140,7 +139,7 @@ export function Payments() {
   }
 
   var sortedPayments = payments.slice().sort(function(a, b) {
-    return new Date(b.date).getTime() - new Date(a.date).getTime();
+    return new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime();
   });
 
   return (
@@ -285,11 +284,11 @@ export function Payments() {
                     return (
                       <tr key={p.id} className="border-b hover:bg-gray-50">
                         <td className="p-3 font-medium">{pMonth}</td>
-                        <td className="p-3">{p.date}</td>
+                        <td className="p-3">{p.paymentDate}</td>
                         <td className="p-3">{getTenantName(p.tenantId)}</td>
                         <td className="p-3">{getTenantPremises(p.tenantId)}</td>
                         <td className="p-3 text-right text-green-600 font-bold">Rs {p.amount.toLocaleString()}</td>
-                        <td className="p-3">{getMethodBadge(p.method || 'cash')}</td>
+                        <td className="p-3">{getMethodBadge(p.paymentMethod || 'cash')}</td>
                         <td className="p-3">{p.transactionNo || '-'}</td>
                         <td className="p-3 text-center">
                           <button
