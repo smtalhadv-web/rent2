@@ -58,7 +58,7 @@ export function RentSheet() {
   const plazaName = settings?.plazaName || 'PLAZA RENT MANAGEMENT';
   const plazaAddress = settings?.address || 'Commercial Area';
   const plazaPhone = settings?.phone || '';
-  const plazaEmail = settings?.email || '';
+  const plazaEmail = '';
   const footerText = settings?.footerText || 'Thank you for your payment!';
   const headerText = settings?.headerText || '';
 

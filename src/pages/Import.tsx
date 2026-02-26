@@ -3,7 +3,7 @@ import { Layout } from '../components/Layout';
 import { useApp } from '../context/AppContext';
 
 export function Import() {
-  const { tenants, addTenant, addRentRecord } = useApp();
+  const { tenants, addTenant, rentRecords, generateRentSheet } = useApp();
   const [inputData, setInputData] = useState('');
   const [importMonth, setImportMonth] = useState('2026-02');
   const [message, setMessage] = useState('');
@@ -158,38 +158,27 @@ export function Import() {
         tenantId = existingTenant.id;
         updated++;
       } else {
-        tenantId = 'T' + Date.now() + '-' + k;
         addTenant({
-          id: tenantId,
           name: row.name,
           premises: row.premises,
           phone: '',
           email: '',
           cnic: '',
-          rent: row.rent,
-          deposit: 0,
+          monthlyRent: row.rent,
+          securityDeposit: 0,
           depositAccountNo: row.depositAccount,
-          iescoNo: row.iescoNo,
+          utilityNo: row.iescoNo,
           effectiveDate: row.effectiveDate,
           status: 'active',
         });
         imported++;
       }
-
-      // Add rent record
-      addRentRecord({
-        id: 'RR' + Date.now() + '-' + k,
-        tenantId: tenantId,
-        monthYear: importMonth,
-        rent: row.rent,
-        outstanding: row.outstanding,
-        paid: row.paid,
-        balance: row.balance,
-        carryForward: row.balance,
-      });
     }
 
-    setMessage('✅ Success! Imported ' + imported + ' new tenants, updated ' + updated + ' existing.');
+    // Generate rent records for the import month
+    generateRentSheet(importMonth);
+
+    setMessage('Success! Imported ' + imported + ' new tenants, updated ' + updated + ' existing.');
     setMessageType('success');
     setPreviewData([]);
     setInputData('');
