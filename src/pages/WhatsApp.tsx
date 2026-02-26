@@ -5,7 +5,7 @@ interface WhatsAppProps {
     tenant: Tenant;
 }
 
-const WhatsApp: React.FC<WhatsAppProps> = ({ tenant }) => {
+export const WhatsApp: React.FC<WhatsAppProps> = ({ tenant }) => {
     return (
         <div>
             <h1>Contact Tenant via WhatsApp</h1>
@@ -14,4 +14,4 @@ const WhatsApp: React.FC<WhatsAppProps> = ({ tenant }) => {
     );
 };
 
-export default WhatsApp;
+

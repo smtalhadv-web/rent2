@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Dashboard = ({ data }) => {
+export const Dashboard = ({ data }: { data?: any }) => {
   return (
     <div>
       <h1>Dashboard</h1>
@@ -19,4 +19,4 @@ const Dashboard = ({ data }) => {
   );
 };
 
-export default Dashboard;
+

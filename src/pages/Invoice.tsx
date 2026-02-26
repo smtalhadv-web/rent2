@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Invoice = ({ monthlyRent, paymentDate }) => {
+export const Invoice = ({ monthlyRent, paymentDate }: { monthlyRent?: number; paymentDate?: string }) => {
     return (
         <div>
             <h1>Invoice</h1>
@@ -10,4 +10,4 @@ const Invoice = ({ monthlyRent, paymentDate }) => {
     );
 };
 
-export default Invoice;
+

@@ -6,7 +6,7 @@ interface Tenant {
     monthlyRent: number;
 }
 
-const Tenants: React.FC = () => {
+export const Tenants: React.FC = () => {
     const tenants: Tenant[] = [
         { id: 1, name: 'John Doe', monthlyRent: 1200 },
         { id: 2, name: 'Jane Smith', monthlyRent: 1500 }
@@ -24,4 +24,4 @@ const Tenants: React.FC = () => {
     );
 };
 
-export default Tenants;
+
