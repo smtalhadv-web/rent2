@@ -104,7 +104,16 @@ export function DatabaseTest() {
 
       // Test 4: Test write operation (insert a test record)
       try {
-        const testId = `test-${Date.now()}`;
+        // Generate a proper UUID format
+        const generateUUID = () => {
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        };
+        
+        const testId = generateUUID();
         const { data: inserted, error } = await supabase
           .from('tenants')
           .insert([
