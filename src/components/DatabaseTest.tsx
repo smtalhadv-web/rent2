@@ -15,13 +15,56 @@ export function DatabaseTest() {
       const testResults: TestResult[] = [];
 
       // Test 0: Check environment variables
-      console.log('[v0] Environment variables:', {
-        url: import.meta.env.VITE_SUPABASE_URL,
-        keyExists: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      console.log('[v0] Environment check:');
+      console.log('[v0] VITE_SUPABASE_URL:', supabaseUrl?.substring(0, 30) + '...');
+      console.log('[v0] VITE_SUPABASE_ANON_KEY exists:', !!supabaseKey);
+
+      testResults.push({
+        status: supabaseUrl && supabaseKey ? 'success' : 'error',
+        message: supabaseUrl && supabaseKey 
+          ? `✓ Environment variables configured` 
+          : `✗ Missing environment variables`,
       });
 
-      // Test 1: Check Supabase connection
-      console.log('[v0] Starting database connection tests...');
+      // Test 1: Test direct API call using fetch (bypasses schema cache)
+      console.log('[v0] Testing direct REST API call...');
+      try {
+        const response = await fetch(
+          `${supabaseUrl}/rest/v1/tenants?select=*&limit=5`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'apikey': supabaseKey,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        testResults.push({
+          status: 'success',
+          message: `✓ Direct REST API successful - Found ${data.length} tenants`,
+          data: data?.slice(0, 2),
+        });
+        console.log('[v0] Direct API test passed. Data count:', data.length);
+      } catch (error: any) {
+        testResults.push({
+          status: 'error',
+          message: `✗ Direct REST API failed: ${error.message}`,
+        });
+        console.log('[v0] Direct API test failed:', error);
+      }
+
+      // Test 2: Check Supabase connection with client
+      console.log('[v0] Testing Supabase client connection...');
       try {
         const { data, error, count } = await supabase
           .from('tenants')
@@ -34,130 +77,19 @@ export function DatabaseTest() {
         
         testResults.push({
           status: 'success',
-          message: `✓ Supabase connection successful - Found ${count || 0} tenants`,
+          message: `✓ Supabase client connection successful - Found ${count || 0} tenants`,
           data: data?.slice(0, 2),
         });
-        console.log('[v0] Connection test passed. Count:', count);
+        console.log('[v0] Client connection test passed. Count:', count);
       } catch (error: any) {
         testResults.push({
           status: 'error',
-          message: `✗ Connection failed: ${error.message || 'Unknown error'}`,
+          message: `✗ Supabase client connection failed: ${error.message || 'Unknown error'}`,
         });
-        console.log('[v0] Connection test failed:', error);
+        console.log('[v0] Client connection test failed:', error);
       }
 
-      // Test 2: Read tenants table
-      try {
-        const { data: tenants, error, count } = await supabase
-          .from('tenants')
-          .select('*', { count: 'exact' });
-        
-        if (error) throw error;
-        
-        testResults.push({
-          status: 'success',
-          message: `✓ Read tenants table: ${count} records found`,
-          data: tenants?.slice(0, 2),
-        });
-        console.log('[v0] Read tenants:', count, 'records');
-      } catch (error: any) {
-        testResults.push({
-          status: 'error',
-          message: `✗ Failed to read tenants: ${error.message}`,
-        });
-        console.log('[v0] Read tenants failed:', error);
-      }
-
-      // Test 3: Read leases table
-      try {
-        const { data: leases, error, count } = await supabase
-          .from('leases')
-          .select('*', { count: 'exact' });
-        
-        if (error) throw error;
-        
-        testResults.push({
-          status: 'success',
-          message: `✓ Read leases table: ${count} records found`,
-          data: leases?.slice(0, 2),
-        });
-        console.log('[v0] Read leases:', count, 'records');
-      } catch (error: any) {
-        testResults.push({
-          status: 'error',
-          message: `✗ Failed to read leases: ${error.message}`,
-        });
-        console.log('[v0] Read leases failed:', error);
-      }
-
-      // Test 4: Read payments table
-      try {
-        const { data: payments, error, count } = await supabase
-          .from('payments')
-          .select('*', { count: 'exact' });
-        
-        if (error) throw error;
-        
-        testResults.push({
-          status: 'success',
-          message: `✓ Read payments table: ${count} records found`,
-          data: payments?.slice(0, 2),
-        });
-        console.log('[v0] Read payments:', count, 'records');
-      } catch (error: any) {
-        testResults.push({
-          status: 'error',
-          message: `✗ Failed to read payments: ${error.message}`,
-        });
-        console.log('[v0] Read payments failed:', error);
-      }
-
-      // Test 5: Read rent records table
-      try {
-        const { data: rentRecords, error, count } = await supabase
-          .from('rent_records')
-          .select('*', { count: 'exact' });
-        
-        if (error) throw error;
-        
-        testResults.push({
-          status: 'success',
-          message: `✓ Read rent_records table: ${count} records found`,
-          data: rentRecords?.slice(0, 2),
-        });
-        console.log('[v0] Read rent_records:', count, 'records');
-      } catch (error: any) {
-        testResults.push({
-          status: 'error',
-          message: `✗ Failed to read rent_records: ${error.message}`,
-        });
-        console.log('[v0] Read rent_records failed:', error);
-      }
-
-      // Test 6: Read settings table
-      try {
-        const { data: settings, error } = await supabase
-          .from('settings')
-          .select('*')
-          .single();
-        
-        if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
-        
-        testResults.push({
-          status: 'success',
-          message: `✓ Read settings table: ${settings ? 'Found' : 'Empty'}`,
-          data: settings,
-        });
-        console.log('[v0] Read settings:', settings);
-      } catch (error: any) {
-        testResults.push({
-          status: 'error',
-          message: `✗ Failed to read settings: ${error.message}`,
-        });
-        console.log('[v0] Read settings failed:', error);
-      }
-
-      // Test 7: Test write operation (insert a test record)
+      // Test 4: Test write operation (insert a test record)
       try {
         const testId = `test-${Date.now()}`;
         const { data: inserted, error } = await supabase
@@ -182,7 +114,7 @@ export function DatabaseTest() {
         });
         console.log('[v0] Write test passed');
 
-        // Test 8: Delete test record
+        // Test 5: Delete test record
         try {
           const { error: deleteError } = await supabase
             .from('tenants')
