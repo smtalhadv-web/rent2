@@ -1443,12 +1443,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setPayments((prev) => [...prev, newPayment]);
 
-    // Update rent record
+    // Update rent record in local state and Supabase
     setRentRecords((prev) =>
       prev.map((r) => {
         if (r.tenantId === payment.tenantId && r.monthYear === payment.monthYear) {
           const newPaid = r.paid + payment.amount;
           const newBalance = r.outstandingPrevious + r.rent - newPaid;
+          
+          // Update in Supabase
+          try {
+            supabase.from('rent_records').update({
+              paid: newPaid,
+              balance: newBalance,
+              carry_forward: newBalance,
+            }).eq('id', r.id).then(({ error }) => {
+              if (error) console.error('[v0] Error updating rent record in Supabase:', error);
+              else console.log('[v0] Rent record updated in Supabase');
+            });
+          } catch (error) {
+            console.error('[v0] Error syncing rent record to Supabase:', error);
+          }
+          
           return {
             ...r,
             paid: newPaid,
