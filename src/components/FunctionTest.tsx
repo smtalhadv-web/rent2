@@ -108,7 +108,8 @@ export function FunctionTest() {
 
           if (rentRecord) {
             const outstanding = rentRecord.balance;
-            const expectedOutstanding = rentRecord.rent - paymentAdded.amount;
+            // Correct formula: outstanding = outstanding_previous + rent - paid
+            const expectedOutstanding = rentRecord.outstandingPrevious + rentRecord.rent - paymentAdded.amount;
             
             newResults.push({
               name: 'Outstanding Balance',
@@ -117,6 +118,7 @@ export function FunctionTest() {
                 ? `Outstanding balance calculated correctly: Rs ${outstanding}`
                 : `Outstanding mismatch: expected Rs ${expectedOutstanding}, got Rs ${outstanding}`,
               details: {
+                outstandingPrevious: rentRecord.outstandingPrevious,
                 rent: rentRecord.rent,
                 paid: rentRecord.paid,
                 outstanding: outstanding,
