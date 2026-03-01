@@ -1293,15 +1293,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         {
           id: newTenant.id,
           name: newTenant.name,
-          cnic: newTenant.cnic,
-          phone: newTenant.phone,
-          email: newTenant.email,
+          cnic: newTenant.cnic && newTenant.cnic.trim() ? newTenant.cnic : null,
+          phone: newTenant.phone && newTenant.phone.trim() ? newTenant.phone : null,
+          email: newTenant.email && newTenant.email.trim() ? newTenant.email : null,
           premises: newTenant.premises,
-          effective_date: newTenant.effectiveDate,
+          effective_date: newTenant.effectiveDate && newTenant.effectiveDate.trim() ? newTenant.effectiveDate : null,
           monthly_rent: newTenant.monthlyRent,
           security_deposit: newTenant.securityDeposit,
-          deposit_account_no: newTenant.depositAccountNo,
-          utility_no: newTenant.utilityNo,
+          deposit_account_no: newTenant.depositAccountNo && newTenant.depositAccountNo.trim() ? newTenant.depositAccountNo : null,
+          utility_no: newTenant.utilityNo && newTenant.utilityNo.trim() ? newTenant.utilityNo : null,
           status: newTenant.status,
         },
       ]);
@@ -1309,6 +1309,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         console.error('[v0] Supabase insert error:', error);
         throw error;
       }
+      console.log('[v0] Tenant inserted successfully');
+      setTenants((prev) => [...prev, newTenant]);
+    } catch (error: any) {
+      console.error('[v0] Error adding tenant to Supabase:', {
+        message: error.message,
+        code: error.code,
+      });
+    }
       console.log('[v0] Tenant inserted successfully:', data);
     } catch (error: any) {
       console.error('[v0] Error adding tenant to Supabase:', {
@@ -1330,17 +1338,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Update in Supabase
     try {
       const updateData: any = {};
-      if (updates.name) updateData.name = updates.name;
-      if (updates.cnic) updateData.cnic = updates.cnic;
-      if (updates.phone) updateData.phone = updates.phone;
-      if (updates.email) updateData.email = updates.email;
-      if (updates.premises) updateData.premises = updates.premises;
-      if (updates.effectiveDate) updateData.effective_date = updates.effectiveDate;
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.cnic !== undefined) updateData.cnic = updates.cnic && updates.cnic.trim() ? updates.cnic : null;
+      if (updates.phone !== undefined) updateData.phone = updates.phone && updates.phone.trim() ? updates.phone : null;
+      if (updates.email !== undefined) updateData.email = updates.email && updates.email.trim() ? updates.email : null;
+      if (updates.premises !== undefined) updateData.premises = updates.premises;
+      if (updates.effectiveDate !== undefined) updateData.effective_date = updates.effectiveDate && updates.effectiveDate.trim() ? updates.effectiveDate : null;
       if (updates.monthlyRent !== undefined) updateData.monthly_rent = updates.monthlyRent;
       if (updates.securityDeposit !== undefined) updateData.security_deposit = updates.securityDeposit;
-      if (updates.depositAccountNo) updateData.deposit_account_no = updates.depositAccountNo;
-      if (updates.utilityNo) updateData.utility_no = updates.utilityNo;
-      if (updates.status) updateData.status = updates.status;
+      if (updates.depositAccountNo !== undefined) updateData.deposit_account_no = updates.depositAccountNo && updates.depositAccountNo.trim() ? updates.depositAccountNo : null;
+      if (updates.utilityNo !== undefined) updateData.utility_no = updates.utilityNo && updates.utilityNo.trim() ? updates.utilityNo : null;
+      if (updates.status !== undefined) updateData.status = updates.status;
 
       if (Object.keys(updateData).length > 0) {
         const { error } = await supabase
