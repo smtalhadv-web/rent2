@@ -13,6 +13,7 @@ import { WhatsApp } from './pages/WhatsApp';
 import { Reports } from './pages/Reports';
 import { Settings } from './pages/Settings';
 import { DatabaseTest } from './components/DatabaseTest';
+import { FunctionTest } from './components/FunctionTest';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useApp();
@@ -29,6 +30,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/test-db" element={<DatabaseTest />} />
+      <Route path="/test-functions" element={<FunctionTest />} />
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/tenants" element={<ProtectedRoute><Tenants /></ProtectedRoute>} />
       <Route path="/leases" element={<ProtectedRoute><Leases /></ProtectedRoute>} />

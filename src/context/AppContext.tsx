@@ -1046,12 +1046,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadSupabaseData = async () => {
       try {
         // Load tenants from Supabase
+        console.log('[v0] Loading tenants from Supabase...');
         const { data: tenantsData, error: tenantsError } = await supabase
           .from('tenants')
           .select('*')
           .order('created_at', { ascending: true });
 
-        if (tenantsError) throw tenantsError;
+        if (tenantsError) {
+          console.error('[v0] Tenants load error:', tenantsError);
+          throw tenantsError;
+        }
+        
+        console.log('[v0] Tenants loaded:', tenantsData?.length || 0);
+        
         if (tenantsData && tenantsData.length > 0) {
           const transformedTenants: Tenant[] = tenantsData.map((t: any) => ({
             id: t.id,
@@ -1069,6 +1076,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             createdAt: t.created_at,
           }));
           setTenants(transformedTenants);
+          console.log('[v0] Tenants state updated with', transformedTenants.length, 'records');
         }
 
         // Load leases from Supabase
@@ -1198,7 +1206,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setDepositAdjustments(transformedAdjustments);
         }
       } catch (error) {
-        console.error('Error loading Supabase data:', error);
+        console.error('[v0] Error loading Supabase data:', error);
+        console.error('[v0] Error details:', {
+          message: (error as any).message,
+          code: (error as any).code,
+          details: (error as any).details,
+        });
         // Fall back to existing state if Supabase load fails
       }
     };
@@ -1271,30 +1284,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
+    console.log('[v0] Adding tenant:', newTenant.name);
+
     // Save to Supabase
     try {
-      const { error } = await supabase.from('tenants').insert([
+      console.log('[v0] Inserting to Supabase tenants table...');
+      const { data, error } = await supabase.from('tenants').insert([
         {
           id: newTenant.id,
           name: newTenant.name,
-          cnic: newTenant.cnic,
-          phone: newTenant.phone,
-          email: newTenant.email,
+          cnic: newTenant.cnic && newTenant.cnic.trim() ? newTenant.cnic : null,
+          phone: newTenant.phone && newTenant.phone.trim() ? newTenant.phone : null,
+          email: newTenant.email && newTenant.email.trim() ? newTenant.email : null,
           premises: newTenant.premises,
-          effective_date: newTenant.effectiveDate,
+          effective_date: newTenant.effectiveDate && newTenant.effectiveDate.trim() ? newTenant.effectiveDate : null,
           monthly_rent: newTenant.monthlyRent,
           security_deposit: newTenant.securityDeposit,
-          deposit_account_no: newTenant.depositAccountNo,
-          utility_no: newTenant.utilityNo,
+          deposit_account_no: newTenant.depositAccountNo && newTenant.depositAccountNo.trim() ? newTenant.depositAccountNo : null,
+          utility_no: newTenant.utilityNo && newTenant.utilityNo.trim() ? newTenant.utilityNo : null,
           status: newTenant.status,
         },
       ]);
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error adding tenant to Supabase:', error);
+      if (error) {
+        console.error('[v0] Supabase insert error:', error);
+        throw error;
+      }
+      console.log('[v0] Tenant inserted successfully');
+      setTenants((prev) => [...prev, newTenant]);
+    } catch (error: any) {
+      console.error('[v0] Error adding tenant to Supabase:', {
+        message: error.message,
+        code: error.code,
+      });
     }
-
-    setTenants((prev) => [...prev, newTenant]);
   }, []);
 
   const updateTenant = useCallback(async (id: string, updates: Partial<Tenant>) => {
@@ -1305,17 +1327,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Update in Supabase
     try {
       const updateData: any = {};
-      if (updates.name) updateData.name = updates.name;
-      if (updates.cnic) updateData.cnic = updates.cnic;
-      if (updates.phone) updateData.phone = updates.phone;
-      if (updates.email) updateData.email = updates.email;
-      if (updates.premises) updateData.premises = updates.premises;
-      if (updates.effectiveDate) updateData.effective_date = updates.effectiveDate;
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.cnic !== undefined) updateData.cnic = updates.cnic && updates.cnic.trim() ? updates.cnic : null;
+      if (updates.phone !== undefined) updateData.phone = updates.phone && updates.phone.trim() ? updates.phone : null;
+      if (updates.email !== undefined) updateData.email = updates.email && updates.email.trim() ? updates.email : null;
+      if (updates.premises !== undefined) updateData.premises = updates.premises;
+      if (updates.effectiveDate !== undefined) updateData.effective_date = updates.effectiveDate && updates.effectiveDate.trim() ? updates.effectiveDate : null;
       if (updates.monthlyRent !== undefined) updateData.monthly_rent = updates.monthlyRent;
       if (updates.securityDeposit !== undefined) updateData.security_deposit = updates.securityDeposit;
-      if (updates.depositAccountNo) updateData.deposit_account_no = updates.depositAccountNo;
-      if (updates.utilityNo) updateData.utility_no = updates.utilityNo;
-      if (updates.status) updateData.status = updates.status;
+      if (updates.depositAccountNo !== undefined) updateData.deposit_account_no = updates.depositAccountNo && updates.depositAccountNo.trim() ? updates.depositAccountNo : null;
+      if (updates.utilityNo !== undefined) updateData.utility_no = updates.utilityNo && updates.utilityNo.trim() ? updates.utilityNo : null;
+      if (updates.status !== undefined) updateData.status = updates.status;
 
       if (Object.keys(updateData).length > 0) {
         const { error } = await supabase
@@ -1341,34 +1363,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const addLease = (lease: Omit<Lease, 'id'>) => {
+  const addLease = useCallback(async (lease: Omit<Lease, 'id'>) => {
     const newLease: Lease = {
       ...lease,
       id: uuidv4(),
     };
-    setLeases((prev) => [...prev, newLease]);
-  };
 
-  const updateLease = (id: string, updates: Partial<Lease>) => {
+    try {
+      const { error } = await supabase.from('leases').insert([
+        {
+          id: newLease.id,
+          tenant_id: newLease.tenantId,
+          start_date: newLease.startDate,
+          end_date: newLease.endDate,
+          duration_months: newLease.durationMonths,
+          increment_percent: newLease.incrementPercent,
+          reminder_days: newLease.reminderDays,
+          status: newLease.status,
+          document_url: newLease.documentUrl,
+        },
+      ]);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding lease to Supabase:', error);
+    }
+
+    setLeases((prev) => [...prev, newLease]);
+  }, []);
+
+  const updateLease = useCallback(async (id: string, updates: Partial<Lease>) => {
     setLeases((prev) =>
       prev.map((l) => (l.id === id ? { ...l, ...updates } : l))
     );
-  };
 
-  const addPayment = (payment: Omit<Payment, 'id' | 'createdAt'>) => {
+    try {
+      const updateData: any = {};
+      if (updates.tenantId) updateData.tenant_id = updates.tenantId;
+      if (updates.startDate) updateData.start_date = updates.startDate;
+      if (updates.endDate) updateData.end_date = updates.endDate;
+      if (updates.durationMonths !== undefined) updateData.duration_months = updates.durationMonths;
+      if (updates.incrementPercent !== undefined) updateData.increment_percent = updates.incrementPercent;
+      if (updates.reminderDays !== undefined) updateData.reminder_days = updates.reminderDays;
+      if (updates.status) updateData.status = updates.status;
+      if (updates.documentUrl) updateData.document_url = updates.documentUrl;
+
+      if (Object.keys(updateData).length > 0) {
+        const { error } = await supabase.from('leases').update(updateData).eq('id', id);
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error('Error updating lease in Supabase:', error);
+    }
+  }, []);
+
+  const addPayment = useCallback(async (payment: Omit<Payment, 'id' | 'createdAt'>) => {
     const newPayment: Payment = {
       ...payment,
       id: uuidv4(),
       createdAt: new Date().toISOString(),
     };
+
+    try {
+      const { error } = await supabase.from('payments').insert([
+        {
+          id: newPayment.id,
+          tenant_id: newPayment.tenantId,
+          month_year: newPayment.monthYear,
+          amount: newPayment.amount,
+          payment_date: newPayment.paymentDate,
+          payment_method: newPayment.paymentMethod,
+          transaction_no: newPayment.transactionNo,
+          deposited_account: newPayment.depositedAccount,
+        },
+      ]);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding payment to Supabase:', error);
+    }
+
     setPayments((prev) => [...prev, newPayment]);
 
-    // Update rent record
+    // Update rent record in local state and Supabase
     setRentRecords((prev) =>
       prev.map((r) => {
         if (r.tenantId === payment.tenantId && r.monthYear === payment.monthYear) {
           const newPaid = r.paid + payment.amount;
           const newBalance = r.outstandingPrevious + r.rent - newPaid;
+          
+          // Update in Supabase
+          try {
+            supabase.from('rent_records').update({
+              paid: newPaid,
+              balance: newBalance,
+              carry_forward: newBalance,
+            }).eq('id', r.id).then(({ error }) => {
+              if (error) console.error('[v0] Error updating rent record in Supabase:', error);
+              else console.log('[v0] Rent record updated in Supabase');
+            });
+          } catch (error) {
+            console.error('[v0] Error syncing rent record to Supabase:', error);
+          }
+          
           return {
             ...r,
             paid: newPaid,
@@ -1379,12 +1474,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return r;
       })
     );
-  };
+  }, []);
 
-  const generateRentSheet = (monthYear: string) => {
+  const generateRentSheet = useCallback(async (monthYear: string) => {
     const activeTenants = tenants.filter((t) => t.status === 'active');
     
-    activeTenants.forEach((tenant) => {
+    for (const tenant of activeTenants) {
       const existingRecord = rentRecords.find(
         (r) => r.tenantId === tenant.id && r.monthYear === monthYear
       );
@@ -1409,16 +1504,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
           carryForward: outstandingPrevious + tenant.monthlyRent,
         };
 
+        try {
+          const { error } = await supabase.from('rent_records').insert([
+            {
+              id: newRecord.id,
+              tenant_id: newRecord.tenantId,
+              month_year: newRecord.monthYear,
+              rent: newRecord.rent,
+              outstanding_previous: newRecord.outstandingPrevious,
+              paid: newRecord.paid,
+              balance: newRecord.balance,
+              carry_forward: newRecord.carryForward,
+            },
+          ]);
+          if (error) throw error;
+        } catch (error) {
+          console.error('Error adding rent record to Supabase:', error);
+        }
+
         setRentRecords((prev) => [...prev, newRecord]);
       }
-    });
-  };
+    }
+  }, [tenants, rentRecords]);
 
-  const updateSettings = (updates: Partial<Settings>) => {
+  const updateSettings = useCallback(async (updates: Partial<Settings>) => {
     setSettings((prev) => ({ ...prev, ...updates }));
-  };
 
-  const applyRentIncrement = (tenantId: string) => {
+    try {
+      const updateData: any = {};
+      if (updates.plazaName) updateData.plaza_name = updates.plazaName;
+      if (updates.address) updateData.address = updates.address;
+      if (updates.phone) updateData.phone = updates.phone;
+      if (updates.logoUrl) updateData.logo_url = updates.logoUrl;
+      if (updates.headerText) updateData.header_text = updates.headerText;
+      if (updates.footerText) updateData.footer_text = updates.footerText;
+      if (updates.termsConditions) updateData.terms_conditions = updates.termsConditions;
+      if (updates.whatsappTemplate) updateData.whatsapp_template = updates.whatsappTemplate;
+      if (updates.defaultIncrementPercent !== undefined) updateData.default_increment_percent = updates.defaultIncrementPercent;
+      if (updates.autoApplyIncrement !== undefined) updateData.auto_apply_increment = updates.autoApplyIncrement;
+      if (updates.bankName) updateData.bank_name = updates.bankName;
+      if (updates.accountTitle) updateData.account_title = updates.accountTitle;
+      if (updates.accountNumber) updateData.account_number = updates.accountNumber;
+
+      if (Object.keys(updateData).length > 0) {
+        // Get the first settings record ID or create one
+        const { data: existingSettings } = await supabase.from('settings').select('id').limit(1);
+        if (existingSettings && existingSettings.length > 0) {
+          const { error } = await supabase.from('settings').update(updateData).eq('id', existingSettings[0].id);
+          if (error) throw error;
+        }
+      }
+    } catch (error) {
+      console.error('Error updating settings in Supabase:', error);
+    }
+  }, []);
+
+  const applyRentIncrement = useCallback(async (tenantId: string) => {
     const tenant = tenants.find((t) => t.id === tenantId);
     const lease = leases.find((l) => l.tenantId === tenantId);
     
@@ -1435,20 +1576,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
         effectiveDate: new Date().toISOString(),
         incrementPercent,
       };
+
+      try {
+        const { error } = await supabase.from('rent_history').insert([
+          {
+            id: historyEntry.id,
+            tenant_id: historyEntry.tenantId,
+            old_rent: historyEntry.oldRent,
+            new_rent: historyEntry.newRent,
+            effective_date: historyEntry.effectiveDate,
+            increment_percent: historyEntry.incrementPercent,
+          },
+        ]);
+        if (error) throw error;
+      } catch (error) {
+        console.error('Error adding rent history to Supabase:', error);
+      }
+
       setRentHistory((prev) => [...prev, historyEntry]);
 
       // Update tenant rent
       updateTenant(tenantId, { monthlyRent: newRent });
     }
-  };
+  }, [tenants, leases, settings, updateTenant]);
 
-  const addDepositAdjustment = (adjustment: Omit<DepositAdjustment, 'id'>) => {
+  const addDepositAdjustment = useCallback(async (adjustment: Omit<DepositAdjustment, 'id'>) => {
     const newAdjustment: DepositAdjustment = {
       ...adjustment,
       id: uuidv4(),
     };
+
+    try {
+      const { error } = await supabase.from('deposit_adjustments').insert([
+        {
+          id: newAdjustment.id,
+          tenant_id: newAdjustment.tenantId,
+          description: newAdjustment.description,
+          amount: newAdjustment.amount,
+          date: newAdjustment.date,
+        },
+      ]);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding deposit adjustment to Supabase:', error);
+    }
+
     setDepositAdjustments((prev) => [...prev, newAdjustment]);
-  };
+  }, []);
 
   const getTenantLedger = (tenantId: string) => {
     const records = rentRecords
