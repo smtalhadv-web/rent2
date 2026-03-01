@@ -34,24 +34,34 @@ export function DatabaseTest() {
 
       // Test 1: Test direct API call using fetch (bypasses schema cache)
       console.log('[v0] Testing direct REST API call...');
+      const restUrl = `${supabaseUrl}/rest/v1/tenants?select=*&limit=5`;
+      console.log('[v0] REST API URL:', restUrl);
+      console.log('[v0] API Key length:', supabaseKey?.length);
+      
       try {
-        const response = await fetch(
-          `${supabaseUrl}/rest/v1/tenants?select=*&limit=5`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'apikey': supabaseKey,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        const response = await fetch(restUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'apikey': supabaseKey,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        console.log('[v0] REST API Response status:', response.status);
+        console.log('[v0] REST API Response headers:', {
+          'content-type': response.headers.get('content-type'),
+          'content-length': response.headers.get('content-length'),
+        });
+
+        const responseText = await response.text();
+        console.log('[v0] REST API Response (first 300 chars):', responseText.substring(0, 300));
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          throw new Error(`HTTP ${response.status}: ${responseText}`);
         }
 
-        const data = await response.json();
+        const data = JSON.parse(responseText);
         testResults.push({
           status: 'success',
           message: `✓ Direct REST API successful - Found ${data.length} tenants`,
