@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { User, Tenant, Lease, Payment, RentRecord, Settings, RentHistory, DepositAdjustment } from '../types';
 import { format, addMonths, differenceInDays, parseISO } from 'date-fns';
+import { supabase } from '../lib/supabase';
 
 interface AppContextType {
   user: User | null;
@@ -1040,8 +1041,180 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Load data from Supabase on mount
   useEffect(() => {
-    localStorage.setItem('tenants', JSON.stringify(tenants));
+    const loadSupabaseData = async () => {
+      try {
+        // Load tenants from Supabase
+        const { data: tenantsData, error: tenantsError } = await supabase
+          .from('tenants')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (tenantsError) throw tenantsError;
+        if (tenantsData && tenantsData.length > 0) {
+          const transformedTenants: Tenant[] = tenantsData.map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            cnic: t.cnic || '',
+            phone: t.phone || '',
+            email: t.email || '',
+            premises: t.premises,
+            effectiveDate: t.effective_date || '',
+            monthlyRent: t.monthly_rent || 0,
+            securityDeposit: t.security_deposit || 0,
+            depositAccountNo: t.deposit_account_no || '',
+            utilityNo: t.utility_no || '',
+            status: t.status,
+            createdAt: t.created_at,
+          }));
+          setTenants(transformedTenants);
+        }
+
+        // Load leases from Supabase
+        const { data: leasesData, error: leasesError } = await supabase
+          .from('leases')
+          .select('*')
+          .order('created_at', { ascending: true });
+
+        if (leasesError) throw leasesError;
+        if (leasesData && leasesData.length > 0) {
+          const transformedLeases: Lease[] = leasesData.map((l: any) => ({
+            id: l.id,
+            tenantId: l.tenant_id,
+            startDate: l.start_date,
+            endDate: l.end_date,
+            durationMonths: l.duration_months,
+            incrementPercent: l.increment_percent,
+            reminderDays: l.reminder_days,
+            status: l.status,
+            documentUrl: l.document_url,
+          }));
+          setLeases(transformedLeases);
+        }
+
+        // Load payments from Supabase
+        const { data: paymentsData, error: paymentsError } = await supabase
+          .from('payments')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (paymentsError) throw paymentsError;
+        if (paymentsData && paymentsData.length > 0) {
+          const transformedPayments: Payment[] = paymentsData.map((p: any) => ({
+            id: p.id,
+            tenantId: p.tenant_id,
+            monthYear: p.month_year,
+            amount: p.amount,
+            paymentDate: p.payment_date,
+            paymentMethod: p.payment_method,
+            transactionNo: p.transaction_no || '',
+            depositedAccount: p.deposited_account || '',
+            createdAt: p.created_at,
+          }));
+          setPayments(transformedPayments);
+        }
+
+        // Load rent records from Supabase
+        const { data: rentRecordsData, error: rentRecordsError } = await supabase
+          .from('rent_records')
+          .select('*')
+          .order('month_year', { ascending: false });
+
+        if (rentRecordsError) throw rentRecordsError;
+        if (rentRecordsData && rentRecordsData.length > 0) {
+          const transformedRecords: RentRecord[] = rentRecordsData.map((r: any) => ({
+            id: r.id,
+            tenantId: r.tenant_id,
+            monthYear: r.month_year,
+            rent: r.rent,
+            outstandingPrevious: r.outstanding_previous,
+            paid: r.paid,
+            balance: r.balance,
+            carryForward: r.carry_forward,
+          }));
+          setRentRecords(transformedRecords);
+        }
+
+        // Load settings from Supabase
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('settings')
+          .select('*')
+          .single();
+
+        if (!settingsError && settingsData) {
+          const transformedSettings: Settings = {
+            plazaName: settingsData.plaza_name,
+            address: settingsData.address || '',
+            phone: settingsData.phone || '',
+            logoUrl: settingsData.logo_url || '',
+            headerText: settingsData.header_text || '',
+            footerText: settingsData.footer_text || '',
+            termsConditions: settingsData.terms_conditions || '',
+            whatsappTemplate: settingsData.whatsapp_template || '',
+            defaultIncrementPercent: settingsData.default_increment_percent || 10,
+            autoApplyIncrement: settingsData.auto_apply_increment || false,
+            bankName: settingsData.bank_name || '',
+            accountTitle: settingsData.account_title || '',
+            accountNumber: settingsData.account_number || '',
+          };
+          setSettings(transformedSettings);
+        }
+
+        // Load rent history from Supabase
+        const { data: rentHistoryData, error: rentHistoryError } = await supabase
+          .from('rent_history')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (rentHistoryError) throw rentHistoryError;
+        if (rentHistoryData && rentHistoryData.length > 0) {
+          const transformedHistory: RentHistory[] = rentHistoryData.map((h: any) => ({
+            id: h.id,
+            tenantId: h.tenant_id,
+            oldRent: h.old_rent,
+            newRent: h.new_rent,
+            effectiveDate: h.effective_date,
+            incrementPercent: h.increment_percent,
+          }));
+          setRentHistory(transformedHistory);
+        }
+
+        // Load deposit adjustments from Supabase
+        const { data: adjustmentsData, error: adjustmentsError } = await supabase
+          .from('deposit_adjustments')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (adjustmentsError) throw adjustmentsError;
+        if (adjustmentsData && adjustmentsData.length > 0) {
+          const transformedAdjustments: DepositAdjustment[] = adjustmentsData.map((a: any) => ({
+            id: a.id,
+            tenantId: a.tenant_id,
+            description: a.description,
+            amount: a.amount,
+            date: a.date,
+          }));
+          setDepositAdjustments(transformedAdjustments);
+        }
+      } catch (error) {
+        console.error('Error loading Supabase data:', error);
+        // Fall back to existing state if Supabase load fails
+      }
+    };
+
+    loadSupabaseData();
+  }, []);
+
+  // Save tenants to Supabase
+  useEffect(() => {
+    const saveTenants = async () => {
+      // Only sync back to Supabase if we have loaded data
+      if (tenants.length > 0) {
+        localStorage.setItem('tenants', JSON.stringify(tenants));
+      }
+    };
+    saveTenants();
   }, [tenants]);
 
   useEffect(() => {
@@ -1091,24 +1264,82 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const addTenant = (tenant: Omit<Tenant, 'id' | 'createdAt'>) => {
+  const addTenant = useCallback(async (tenant: Omit<Tenant, 'id' | 'createdAt'>) => {
     const newTenant: Tenant = {
       ...tenant,
       id: uuidv4(),
       createdAt: new Date().toISOString(),
     };
-    setTenants((prev) => [...prev, newTenant]);
-  };
 
-  const updateTenant = (id: string, updates: Partial<Tenant>) => {
+    // Save to Supabase
+    try {
+      const { error } = await supabase.from('tenants').insert([
+        {
+          id: newTenant.id,
+          name: newTenant.name,
+          cnic: newTenant.cnic,
+          phone: newTenant.phone,
+          email: newTenant.email,
+          premises: newTenant.premises,
+          effective_date: newTenant.effectiveDate,
+          monthly_rent: newTenant.monthlyRent,
+          security_deposit: newTenant.securityDeposit,
+          deposit_account_no: newTenant.depositAccountNo,
+          utility_no: newTenant.utilityNo,
+          status: newTenant.status,
+        },
+      ]);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding tenant to Supabase:', error);
+    }
+
+    setTenants((prev) => [...prev, newTenant]);
+  }, []);
+
+  const updateTenant = useCallback(async (id: string, updates: Partial<Tenant>) => {
     setTenants((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
-  };
 
-  const deleteTenant = (id: string) => {
+    // Update in Supabase
+    try {
+      const updateData: any = {};
+      if (updates.name) updateData.name = updates.name;
+      if (updates.cnic) updateData.cnic = updates.cnic;
+      if (updates.phone) updateData.phone = updates.phone;
+      if (updates.email) updateData.email = updates.email;
+      if (updates.premises) updateData.premises = updates.premises;
+      if (updates.effectiveDate) updateData.effective_date = updates.effectiveDate;
+      if (updates.monthlyRent !== undefined) updateData.monthly_rent = updates.monthlyRent;
+      if (updates.securityDeposit !== undefined) updateData.security_deposit = updates.securityDeposit;
+      if (updates.depositAccountNo) updateData.deposit_account_no = updates.depositAccountNo;
+      if (updates.utilityNo) updateData.utility_no = updates.utilityNo;
+      if (updates.status) updateData.status = updates.status;
+
+      if (Object.keys(updateData).length > 0) {
+        const { error } = await supabase
+          .from('tenants')
+          .update(updateData)
+          .eq('id', id);
+        if (error) throw error;
+      }
+    } catch (error) {
+      console.error('Error updating tenant in Supabase:', error);
+    }
+  }, []);
+
+  const deleteTenant = useCallback(async (id: string) => {
     setTenants((prev) => prev.filter((t) => t.id !== id));
-  };
+
+    // Delete from Supabase
+    try {
+      const { error } = await supabase.from('tenants').delete().eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting tenant from Supabase:', error);
+    }
+  }, []);
 
   const addLease = (lease: Omit<Lease, 'id'>) => {
     const newLease: Lease = {
