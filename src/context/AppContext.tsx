@@ -1284,9 +1284,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     };
 
+    console.log('[v0] Adding tenant:', newTenant.name);
+
     // Save to Supabase
     try {
-      const { error } = await supabase.from('tenants').insert([
+      console.log('[v0] Inserting to Supabase tenants table...');
+      const { data, error } = await supabase.from('tenants').insert([
         {
           id: newTenant.id,
           name: newTenant.name,
@@ -1302,11 +1305,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
           status: newTenant.status,
         },
       ]);
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error adding tenant to Supabase:', error);
+      if (error) {
+        console.error('[v0] Supabase insert error:', error);
+        throw error;
+      }
+      console.log('[v0] Tenant inserted successfully:', data);
+    } catch (error: any) {
+      console.error('[v0] Error adding tenant to Supabase:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+      });
     }
 
+    console.log('[v0] Updating local state with tenant:', newTenant.name);
     setTenants((prev) => [...prev, newTenant]);
   }, []);
 
