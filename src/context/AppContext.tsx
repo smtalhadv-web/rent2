@@ -1046,12 +1046,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadSupabaseData = async () => {
       try {
         // Load tenants from Supabase
+        console.log('[v0] Loading tenants from Supabase...');
         const { data: tenantsData, error: tenantsError } = await supabase
           .from('tenants')
           .select('*')
           .order('created_at', { ascending: true });
 
-        if (tenantsError) throw tenantsError;
+        if (tenantsError) {
+          console.error('[v0] Tenants load error:', tenantsError);
+          throw tenantsError;
+        }
+        
+        console.log('[v0] Tenants loaded:', tenantsData?.length || 0);
+        
         if (tenantsData && tenantsData.length > 0) {
           const transformedTenants: Tenant[] = tenantsData.map((t: any) => ({
             id: t.id,
@@ -1069,6 +1076,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             createdAt: t.created_at,
           }));
           setTenants(transformedTenants);
+          console.log('[v0] Tenants state updated with', transformedTenants.length, 'records');
         }
 
         // Load leases from Supabase
@@ -1198,7 +1206,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setDepositAdjustments(transformedAdjustments);
         }
       } catch (error) {
-        console.error('Error loading Supabase data:', error);
+        console.error('[v0] Error loading Supabase data:', error);
+        console.error('[v0] Error details:', {
+          message: (error as any).message,
+          code: (error as any).code,
+          details: (error as any).details,
+        });
         // Fall back to existing state if Supabase load fails
       }
     };
