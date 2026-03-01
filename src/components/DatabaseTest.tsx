@@ -14,20 +14,34 @@ export function DatabaseTest() {
     const runTests = async () => {
       const testResults: TestResult[] = [];
 
+      // Test 0: Check environment variables
+      console.log('[v0] Environment variables:', {
+        url: import.meta.env.VITE_SUPABASE_URL,
+        keyExists: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+      });
+
       // Test 1: Check Supabase connection
       console.log('[v0] Starting database connection tests...');
       try {
-        const { data, error } = await supabase.from('tenants').select('count()', { count: 'exact' });
-        if (error) throw error;
+        const { data, error, count } = await supabase
+          .from('tenants')
+          .select('*', { count: 'exact' });
+        
+        if (error) {
+          console.error('[v0] Query error:', error);
+          throw error;
+        }
+        
         testResults.push({
           status: 'success',
-          message: '✓ Supabase connection successful',
+          message: `✓ Supabase connection successful - Found ${count || 0} tenants`,
+          data: data?.slice(0, 2),
         });
-        console.log('[v0] Connection test passed');
+        console.log('[v0] Connection test passed. Count:', count);
       } catch (error: any) {
         testResults.push({
           status: 'error',
-          message: `✗ Connection failed: ${error.message}`,
+          message: `✗ Connection failed: ${error.message || 'Unknown error'}`,
         });
         console.log('[v0] Connection test failed:', error);
       }

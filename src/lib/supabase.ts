@@ -1,9 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Use NEXT_PUBLIC_ prefixed variables from Vercel environment
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 
+                    (import.meta.env as any).NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 
+                        (import.meta.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+console.log('[v0] Initializing Supabase with URL:', supabaseUrl?.substring(0, 30) + '...');
 
 if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('[v0] Missing Supabase environment variables');
+  console.error('[v0] VITE_SUPABASE_URL:', !!import.meta.env.VITE_SUPABASE_URL);
+  console.error('[v0] VITE_SUPABASE_ANON_KEY:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+  console.error('[v0] NEXT_PUBLIC_SUPABASE_URL:', !!(import.meta.env as any).NEXT_PUBLIC_SUPABASE_URL);
+  console.error('[v0] NEXT_PUBLIC_SUPABASE_ANON_KEY:', !!(import.meta.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY);
   throw new Error('Missing Supabase environment variables');
 }
 
