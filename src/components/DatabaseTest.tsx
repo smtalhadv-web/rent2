@@ -15,17 +15,20 @@ export function DatabaseTest() {
       const testResults: TestResult[] = [];
 
       // Test 0: Check environment variables
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const supabaseUrl = (import.meta.env as any).NEXT_PUBLIC_SUPABASE_URL || 
+                          import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = (import.meta.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+                          import.meta.env.VITE_SUPABASE_ANON_KEY;
       
       console.log('[v0] Environment check:');
-      console.log('[v0] VITE_SUPABASE_URL:', supabaseUrl?.substring(0, 30) + '...');
-      console.log('[v0] VITE_SUPABASE_ANON_KEY exists:', !!supabaseKey);
+      console.log('[v0] NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl?.substring(0, 30) + '...');
+      console.log('[v0] NEXT_PUBLIC_SUPABASE_ANON_KEY exists:', !!supabaseKey);
+      console.log('[v0] All env keys:', Object.keys(import.meta.env).filter(k => k.includes('SUPABASE')));
 
       testResults.push({
         status: supabaseUrl && supabaseKey ? 'success' : 'error',
         message: supabaseUrl && supabaseKey 
-          ? `✓ Environment variables configured` 
+          ? `✓ Environment variables configured (${supabaseUrl.substring(0, 20)}...)` 
           : `✗ Missing environment variables`,
       });
 

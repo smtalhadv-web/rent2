@@ -1,20 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Use NEXT_PUBLIC_ prefixed variables from Vercel environment
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 
-                    (import.meta.env as any).NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 
-                        (import.meta.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Get Supabase credentials from environment variables
+// Vite exposes NEXT_PUBLIC_ prefixed variables without the prefix
+const supabaseUrl = (import.meta.env as any).NEXT_PUBLIC_SUPABASE_URL || 
+                    import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = (import.meta.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY || 
+                        import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-console.log('[v0] Initializing Supabase with URL:', supabaseUrl?.substring(0, 30) + '...');
+console.log('[v0] Initializing Supabase');
+console.log('[v0] URL available:', !!supabaseUrl);
+console.log('[v0] Key available:', !!supabaseAnonKey);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('[v0] Missing Supabase environment variables');
-  console.error('[v0] VITE_SUPABASE_URL:', !!import.meta.env.VITE_SUPABASE_URL);
-  console.error('[v0] VITE_SUPABASE_ANON_KEY:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
-  console.error('[v0] NEXT_PUBLIC_SUPABASE_URL:', !!(import.meta.env as any).NEXT_PUBLIC_SUPABASE_URL);
-  console.error('[v0] NEXT_PUBLIC_SUPABASE_ANON_KEY:', !!(import.meta.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY);
-  throw new Error('Missing Supabase environment variables');
+  console.error('[v0] Available env keys:', Object.keys(import.meta.env).filter(k => k.includes('SUPABASE') || k.includes('supabase')));
+  throw new Error('Missing Supabase environment variables - check your environment setup');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
