@@ -1317,17 +1317,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         code: error.code,
       });
     }
-      console.log('[v0] Tenant inserted successfully:', data);
-    } catch (error: any) {
-      console.error('[v0] Error adding tenant to Supabase:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-      });
-    }
-
-    console.log('[v0] Updating local state with tenant:', newTenant.name);
-    setTenants((prev) => [...prev, newTenant]);
   }, []);
 
   const updateTenant = useCallback(async (id: string, updates: Partial<Tenant>) => {
