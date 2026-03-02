@@ -38,7 +38,8 @@ export function RentSheet() {
         setLoading(true);
         setError('');
 
-        const { data, error: fetchError } = await supabase
+        // Get current month data
+        const { data: currentMonth, error: fetchError } = await supabase
           .from('rent_records')
           .select(`
             id,
@@ -64,19 +65,42 @@ export function RentSheet() {
           return;
         }
 
-        // Transform data
-        const transformed: RentSheetRow[] = (data || []).map((record: any) => ({
-          id: record.id,
-          tenant_id: record.tenant_id,
-          tenant_name: record.tenants?.name || 'Unknown',
-          premises: record.tenants?.premises || 'N/A',
-          status: record.tenants?.status || 'active',
-          rent: record.rent || 0,
-          outstanding_previous: record.outstanding_previous || 0,
-          paid: record.paid || 0,
-          balance: record.balance || 0,
-          carry_forward: record.carry_forward || 0,
-        }));
+        // Get previous month to get carry forward
+        const prevMonth = new Date(selectedMonth + '-01');
+        prevMonth.setMonth(prevMonth.getMonth() - 1);
+        const prevMonthStr = prevMonth.toISOString().slice(0, 7);
+
+        const { data: previousMonthData } = await supabase
+          .from('rent_records')
+          .select('tenant_id, carry_forward')
+          .eq('month_year', prevMonthStr);
+
+        // Create a map of previous month carry forward
+        const carryForwardMap: Record<string, number> = {};
+        previousMonthData?.forEach((record: any) => {
+          carryForwardMap[record.tenant_id] = record.carry_forward || 0;
+        });
+
+        // Transform data - use previous month carry forward as outstanding previous
+        const transformed: RentSheetRow[] = (currentMonth || []).map((record: any) => {
+          const outstandingFromPrevious = carryForwardMap[record.tenant_id] || 0;
+          const rent = record.rent || 0;
+          const paid = record.paid || 0;
+          const carryForward = outstandingFromPrevious + rent - paid;
+
+          return {
+            id: record.id,
+            tenant_id: record.tenant_id,
+            tenant_name: record.tenants?.name || 'Unknown',
+            premises: record.tenants?.premises || 'N/A',
+            status: record.tenants?.status || 'active',
+            rent: rent,
+            outstanding_previous: outstandingFromPrevious,
+            paid: paid,
+            balance: carryForward,
+            carry_forward: carryForward,
+          };
+        });
 
         console.log('[v0] Loaded rent sheet data:', transformed.length, 'records');
         setSheetData(transformed);
