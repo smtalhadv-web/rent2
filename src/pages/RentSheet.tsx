@@ -534,6 +534,30 @@ export function RentSheet() {
     if (days <= 30) return { text: days + 'd left', color: 'bg-yellow-100 text-yellow-700' };
     return { text: 'Active', color: 'bg-green-100 text-green-700' };
   }
+  
+  // Filter tenants based on status and search term
+  const filteredTenants = (tenants || []).filter(t => {
+    const matchStatus = filterStatus === 'all' || t.status === filterStatus;
+    const matchSearch = !searchTerm || 
+      (t.name && t.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.premises && t.premises.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.phone && t.phone.includes(searchTerm));
+    return matchStatus && matchSearch;
+  });
+
+  // Calculate totals using carryForward values
+  let totalRent = 0;
+  let totalOutstanding = 0;
+  let totalPaid = 0;
+  let totalBalance = 0;
+
+  for (let i = 0; i < filteredTenants.length; i++) {
+    const data = getRentData(filteredTenants[i].id);
+    totalRent += data.rent;
+    totalOutstanding += data.outstanding;
+    totalPaid += data.paid;
+    totalBalance += (data.carryForward || data.balance);
+  }
 
   // Export to Excel
   function handleExport() {
@@ -570,30 +594,6 @@ export function RentSheet() {
 
   // Get payment details for display
   const paymentDetails = getPaymentDetails();
-
-  // Filter tenants based on status and search term
-  const filteredTenants = (tenants || []).filter(t => {
-    const matchStatus = filterStatus === 'all' || t.status === filterStatus;
-    const matchSearch = !searchTerm || 
-      (t.name && t.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (t.premises && t.premises.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (t.phone && t.phone.includes(searchTerm));
-    return matchStatus && matchSearch;
-  });
-
-  // Calculate totals using carryForward values
-  let totalRent = 0;
-  let totalOutstanding = 0;
-  let totalPaid = 0;
-  let totalBalance = 0;
-
-  for (let i = 0; i < filteredTenants.length; i++) {
-    const data = getRentData(filteredTenants[i].id);
-    totalRent += data.rent;
-    totalOutstanding += data.outstanding;
-    totalPaid += data.paid;
-    totalBalance += (data.carryForward || data.balance);
-  }
 
   return (
     <Layout>
