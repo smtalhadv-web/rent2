@@ -172,19 +172,24 @@ export function RentSheet() {
 
   // Payment details calculation
   function getPaymentDetails() {
+    if (!selectedTenantId) return { rent: 0, outstanding: 0, totalDue: 0, previousPaid: 0 };
+    
     const tenant = getSelectedTenant();
     if (!tenant) return { rent: 0, outstanding: 0, totalDue: 0, previousPaid: 0 };
     
-    const data = getRentData(selectedTenantId, paymentMonth);
-    const totalDue = data.rent + data.outstanding - data.paid;
+    const month = paymentMonth || selectedMonth || new Date().toISOString().slice(0, 7);
+    const data = getRentData(selectedTenantId, month);
+    if (!data) return { rent: 0, outstanding: 0, totalDue: 0, previousPaid: 0 };
     
-  return {
-    rent: data.rent,
-    outstanding: data.outstanding,
-    totalDue: totalDue > 0 ? totalDue : 0,
-    previousPaid: data.paid
-  };
-}
+    const totalDue = (data.rent || 0) + (data.outstanding || 0) - (data.paid || 0);
+    
+    return {
+      rent: data.rent || 0,
+      outstanding: data.outstanding || 0,
+      totalDue: totalDue > 0 ? totalDue : 0,
+      previousPaid: data.paid || 0
+    };
+  }
 
   // Submit Payment
   function submitPayment(e: React.FormEvent) {
@@ -605,7 +610,12 @@ export function RentSheet() {
   }
 
   // Get payment details for display
-  const paymentDetails = getPaymentDetails();
+  let paymentDetails = { rent: 0, outstanding: 0, totalDue: 0, previousPaid: 0 };
+  try {
+    paymentDetails = getPaymentDetails();
+  } catch (e) {
+    console.error('[v0] Error getting payment details:', e);
+  }
 
   return (
     <Layout>
