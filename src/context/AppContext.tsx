@@ -1441,7 +1441,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('Error adding payment to Supabase:', error);
     }
 
-    setPayments((prev) => [...prev, newPayment]);
+  setPayments((prev) => [...prev, newPayment]);
 
     // Update rent record in local state and Supabase
     setRentRecords((prev) =>
