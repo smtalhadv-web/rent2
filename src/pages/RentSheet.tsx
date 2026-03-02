@@ -571,7 +571,7 @@ export function RentSheet() {
   // Get payment details for display
   const paymentDetails = getPaymentDetails();
 
-  // Calculate filtered tenants and totals
+  // Filter tenants based on status and search term
   const filteredTenants = (tenants || []).filter(t => {
     const matchStatus = filterStatus === 'all' || t.status === filterStatus;
     const matchSearch = !searchTerm || 
@@ -587,10 +587,8 @@ export function RentSheet() {
   let totalPaid = 0;
   let totalBalance = 0;
 
-  for (let n = 0; n < filteredTenants.length; n++) {
-    const tenant = filteredTenants[n];
-    const data = getRentData(tenant.id);
-    
+  for (let i = 0; i < filteredTenants.length; i++) {
+    const data = getRentData(filteredTenants[i].id);
     totalRent += data.rent;
     totalOutstanding += data.outstanding;
     totalPaid += data.paid;
