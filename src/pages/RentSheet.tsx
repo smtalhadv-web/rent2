@@ -147,14 +147,12 @@ export function RentSheet() {
   const balance = rent + outstanding - paid;
   
   return {
-  rent,
-  outstanding,
-  paid,
-  balance,
-  carryForward: balance
+    rent,
+    outstanding,
+    paid,
+    balance,
+    carryForward: balance
   };
-      reader.readAsDataURL(file);
-    }
   }
 
   // Open Payment Modal
