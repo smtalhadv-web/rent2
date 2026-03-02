@@ -550,39 +550,53 @@ export function RentSheet() {
   let totalBalance = 0;
 
   for (let i = 0; i < filteredTenants.length; i++) {
-    const data = getRentData(filteredTenants[i].id);
-    totalRent += data.rent;
-    totalOutstanding += data.outstanding;
-    totalPaid += data.paid;
-    totalBalance += (data.carryForward || data.balance);
+    try {
+      const tenant = filteredTenants[i];
+      if (tenant && tenant.id) {
+        const data = getRentData(tenant.id, selectedMonth);
+        totalRent += data.rent || 0;
+        totalOutstanding += data.outstanding || 0;
+        totalPaid += data.paid || 0;
+        totalBalance += (data.carryForward || data.balance || 0);
+      }
+    } catch (e) {
+      console.error('[v0] Error calculating totals:', e);
+    }
   }
 
   // Export to Excel
   function handleExport() {
     let csv = 'Sr,Tenant,Shop,Rent,Outstanding,Paid,Balance,Phone,Utility No,Status\n';
     
-    for (let p = 0; p < filteredTenants.length; p++) {
-      const t = filteredTenants[p];
-      const data = getRentData(t.id);
+    try {
+      for (let p = 0; p < filteredTenants.length; p++) {
+        const t = filteredTenants[p];
+        if (t && t.id) {
+          const data = getRentData(t.id, selectedMonth);
+          
+          csv += (p + 1) + ',';
+          csv += '"' + (t.name || '') + '",';
+          csv += '"' + (t.premises || '') + '",';
+          csv += (data.rent || 0) + ',';
+          csv += (data.outstanding || 0) + ',';
+          csv += (data.paid || 0) + ',';
+          csv += (data.balance || 0) + ',';
+          csv += '"' + (t.phone || '') + '",';
+          csv += '"' + (t.utilityNo || '') + '",';
+          csv += (t.status || '') + '\n';
+        }
+      }
       
-      csv += (p + 1) + ',';
-      csv += '"' + (t.name || '') + '",';
-      csv += '"' + (t.premises || '') + '",';
-      csv += data.rent + ',';
-      csv += data.outstanding + ',';
-      csv += data.paid + ',';
-      csv += data.balance + ',';
-      csv += '"' + (t.phone || '') + '",';
-      csv += '"' + (t.utilityNo || '') + '",';
-      csv += (t.status || '') + '\n';
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'rent-sheet-' + selectedMonth + '.csv';
+      a.click();
+    } catch (e) {
+      console.error('[v0] Error exporting rent sheet:', e);
+      alert('Error exporting data');
     }
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'rent-sheet-' + selectedMonth + '.csv';
-    a.click();
   }
 
   // Print Rent Sheet
@@ -666,19 +680,19 @@ export function RentSheet() {
               </thead>
               <tbody>
                 {filteredTenants.length > 0 ? filteredTenants.map((tenant, idx) => {
-                  const data = getRentData(tenant.id);
+                  const data = getRentData(tenant.id, selectedMonth);
                   const leaseStatus = getLeaseStatus(tenant.id);
-                  const carryForwardAmount = data.carryForward || data.balance;
+                  const carryForwardAmount = data?.carryForward || data?.balance || 0;
                   const balanceColor = carryForwardAmount > 0 ? 'text-red-600' : carryForwardAmount < 0 ? 'text-green-600' : '';
                   
                   return (
                     <tr key={tenant.id} className="border-b hover:bg-gray-50">
                       <td className="p-2">{idx + 1}</td>
-                      <td className="p-2 font-medium">{tenant.name || 'N/A'}</td>
-                      <td className="p-2">{tenant.premises || 'N/A'}</td>
-                      <td className="p-2 text-right">{formatNum(data.rent)}</td>
-                      <td className="p-2 text-right text-orange-600">{formatNum(data.outstanding)}</td>
-                      <td className="p-2 text-right text-green-600">{formatNum(data.paid)}</td>
+                      <td className="p-2 font-medium">{tenant?.name || 'N/A'}</td>
+                      <td className="p-2">{tenant?.premises || 'N/A'}</td>
+                      <td className="p-2 text-right">{formatNum(data?.rent || 0)}</td>
+                      <td className="p-2 text-right text-orange-600">{formatNum(data?.outstanding || 0)}</td>
+                      <td className="p-2 text-right text-green-600">{formatNum(data?.paid || 0)}</td>
                       <td className={'p-2 text-right font-bold ' + balanceColor}>{formatNum(carryForwardAmount)}</td>
                       <td className="p-2 text-center">
                         <span className={'px-2 py-0.5 rounded text-xs ' + leaseStatus.color}>{leaseStatus.text}</span>
