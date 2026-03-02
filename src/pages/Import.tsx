@@ -3,7 +3,7 @@ import { Layout } from '../components/Layout';
 import { useApp } from '../context/AppContext';
 
 export function Import() {
-  const { tenants, addTenant, addPayment, generateRentSheet } = useApp();
+  const { tenants, addTenant, addPayment, generateRentSheet, importRentRecords } = useApp();
   const [inputData, setInputData] = useState('');
   const [importMonth, setImportMonth] = useState('2026-02');
   const [message, setMessage] = useState('');
@@ -135,9 +135,14 @@ export function Import() {
       return;
     }
 
+    console.log('[v0] Starting import with', previewData.length, 'tenants for month', importMonth);
+
     var imported = 0;
     var updated = 0;
+    var tenantsToAdd: Array<{name: string; premises: string; rent: number; effectiveDate: string; iescoNo: string; depositAccount: string}> = [];
+    var tenantMap: {[key: string]: string} = {}; // Map premises to tenant ID for later
 
+    // Step 1: Collect all tenants to add and check existing ones
     for (var k = 0; k < previewData.length; k++) {
       var row = previewData[k];
       if (!row.name || !row.premises) continue;
@@ -153,53 +158,92 @@ export function Import() {
         }
       }
 
-      var tenantId = '';
       if (existingTenant) {
-        tenantId = existingTenant.id;
+        tenantMap[row.premises] = existingTenant.id;
         updated++;
       } else {
-        addTenant({
+        tenantsToAdd.push({
           name: row.name,
           premises: row.premises,
-          phone: '',
-          email: '',
-          cnic: '',
-          monthlyRent: row.rent,
-          deposit: 0,
-          depositAccountNo: row.depositAccount,
-          iescoNo: row.iescoNo,
+          rent: row.rent,
           effectiveDate: row.effectiveDate,
-          status: 'active',
+          iescoNo: row.iescoNo,
+          depositAccount: row.depositAccount,
         });
         imported++;
-        // Note: tenantId will be assigned by addTenant, but we'll use existing tenant lookup for payments
       }
     }
 
-    // Generate rent sheet for the month to create rent records
-    generateRentSheet(importMonth);
+    // Step 2: Add new tenants first and collect their IDs
+    var addedTenantPromises: Promise<void>[] = [];
+    for (var t = 0; t < tenantsToAdd.length; t++) {
+      var tenantData = tenantsToAdd[t];
+      var newTenant = {
+        name: tenantData.name,
+        premises: tenantData.premises,
+        phone: '',
+        email: '',
+        cnic: '',
+        monthlyRent: tenantData.rent,
+        deposit: 0,
+        depositAccountNo: tenantData.depositAccount,
+        iescoNo: tenantData.iescoNo,
+        effectiveDate: tenantData.effectiveDate,
+        status: 'active' as const,
+      };
+      
+      // addTenant returns void but updates state, so we need to track the addition
+      addTenant(newTenant);
+      console.log('[v0] Added tenant:', tenantData.name, '- Premises:', tenantData.premises);
+    }
 
-    // Add any payments that were recorded
-    for (var p = 0; p < previewData.length; p++) {
-      var paidRow = previewData[p];
-      if (paidRow.paid > 0) {
-        // Find the tenant that was just added
-        var tenant = tenants.find(t => t.premises === paidRow.premises);
-        if (tenant) {
-          addPayment({
-            tenantId: tenant.id,
-            amount: paidRow.paid,
+    // Step 3: After a small delay, collect tenant IDs and import rent records
+    setTimeout(function() {
+      console.log('[v0] Collecting tenant IDs for rent record import');
+      
+      // Collect rent record data with outstanding amounts
+      var rentRecordData: Array<{
+        tenantId: string;
+        monthYear: string;
+        rent: number;
+        outstandingPrevious: number;
+        paid: number;
+      }> = [];
+
+      for (var p = 0; p < previewData.length; p++) {
+        var dataRow = previewData[p];
+        var tenantId = tenantMap[dataRow.premises];
+        
+        // If not found in map, search for newly added tenant
+        if (!tenantId) {
+          var foundTenant = tenants.find(function(t) { return t.premises === dataRow.premises; });
+          if (foundTenant) {
+            tenantId = foundTenant.id;
+          }
+        }
+
+        if (tenantId) {
+          rentRecordData.push({
+            tenantId: tenantId,
             monthYear: importMonth,
-            date: new Date().toISOString().split('T')[0],
-            method: 'cash',
-            notes: 'Imported from rent sheet',
+            rent: dataRow.rent,
+            outstandingPrevious: dataRow.outstanding,
+            paid: dataRow.paid,
           });
+          console.log('[v0] Prepared rent record for', dataRow.name, '- Outstanding:', dataRow.outstanding, '- Paid:', dataRow.paid);
         }
       }
-    }
 
-    setMessage('✅ Success! Imported ' + imported + ' new tenants, updated ' + updated + ' existing.');
-    setMessageType('success');
+      // Step 4: Import all rent records at once
+      if (rentRecordData.length > 0) {
+        console.log('[v0] Importing', rentRecordData.length, 'rent records');
+        importRentRecords(rentRecordData);
+      }
+
+      setMessage('✅ Success! Imported ' + imported + ' new tenants and ' + updated + ' existing tenants. Created ' + rentRecordData.length + ' rent records with outstanding amounts.');
+      setMessageType('success');
+    }, 300);
+
     setPreviewData([]);
     setInputData('');
   }

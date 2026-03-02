@@ -1624,6 +1624,81 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDepositAdjustments((prev) => [...prev, newAdjustment]);
   }, []);
 
+  const importRentRecords = useCallback(
+    async (
+      data: Array<{
+        tenantId: string;
+        monthYear: string;
+        rent: number;
+        outstandingPrevious: number;
+        paid?: number;
+      }>
+    ) => {
+      const newRecords: RentRecord[] = [];
+
+      for (const item of data) {
+        // Check if record already exists
+        const existing = rentRecords.find(
+          (r) => r.tenantId === item.tenantId && r.monthYear === item.monthYear
+        );
+
+        if (!existing) {
+          const paid = item.paid || 0;
+          const balance = item.outstandingPrevious + item.rent - paid;
+
+          const newRecord: RentRecord = {
+            id: uuidv4(),
+            tenantId: item.tenantId,
+            monthYear: item.monthYear,
+            rent: item.rent,
+            outstandingPrevious: item.outstandingPrevious,
+            paid,
+            balance,
+            carryForward: balance,
+          };
+
+          newRecords.push(newRecord);
+        }
+      }
+
+      if (newRecords.length === 0) {
+        console.log('[v0] No new records to import');
+        return;
+      }
+
+      // Bulk insert to Supabase
+      try {
+        const recordsToInsert = newRecords.map((r) => ({
+          id: r.id,
+          tenant_id: r.tenantId,
+          month_year: r.monthYear,
+          rent: r.rent,
+          outstanding_previous: r.outstandingPrevious,
+          paid: r.paid,
+          balance: r.balance,
+          carry_forward: r.carryForward,
+        }));
+
+        const { error } = await supabase
+          .from('rent_records')
+          .insert(recordsToInsert);
+
+        if (error) {
+          console.error('[v0] Error importing rent records:', error);
+          throw error;
+        }
+
+        console.log('[v0] Successfully imported', newRecords.length, 'rent records');
+      } catch (error) {
+        console.error('[v0] Error syncing rent records to Supabase:', error);
+      }
+
+      // Update local state
+      setRentRecords((prev) => [...prev, ...newRecords]);
+    },
+    [rentRecords]
+  );
+
   const getTenantLedger = (tenantId: string) => {
     const records = rentRecords
       .filter((r) => r.tenantId === tenantId)
@@ -1676,6 +1751,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addPayment,
         rentRecords,
         generateRentSheet,
+        importRentRecords,
         settings,
         updateSettings,
         rentHistory,
