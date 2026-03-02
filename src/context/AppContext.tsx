@@ -1438,27 +1438,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ]);
       if (error) throw error;
     } catch (error) {
-      console.error('Error adding payment to Supabase:', error);
+      console.error('[v0] Error adding payment to Supabase:', error);
     }
 
-  setPayments((prev) => [...prev, newPayment]);
+    setPayments((prev) => [...prev, newPayment]);
 
     // Update rent record in local state and Supabase
-    setRentRecords((prev) =>
-      prev.map((r) => {
+    setRentRecords((prev) => {
+      return prev.map((r) => {
+        // Only update the matching rent record
         if (r.tenantId === payment.tenantId && r.monthYear === payment.monthYear) {
-          const newPaid = r.paid + payment.amount;
-          const newBalance = r.outstandingPrevious + r.rent - newPaid;
+          // Calculate new paid amount by summing all payments for this tenant/month
+          const allPaymentsForThisRecord = payments.filter(
+            p => p.tenantId === payment.tenantId && p.monthYear === payment.monthYear
+          );
+          const totalPaid = allPaymentsForThisRecord.reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+          
+          const newBalance = r.outstandingPrevious + r.rent - totalPaid;
+          
+          console.log('[v0] Updating rent record:', {
+            tenantId: r.tenantId,
+            monthYear: r.monthYear,
+            outstandingPrevious: r.outstandingPrevious,
+            rent: r.rent,
+            totalPaid,
+            newBalance,
+          });
           
           // Update in Supabase
           try {
             supabase.from('rent_records').update({
-              paid: newPaid,
+              paid: totalPaid,
               balance: newBalance,
               carry_forward: newBalance,
             }).eq('id', r.id).then(({ error }) => {
               if (error) console.error('[v0] Error updating rent record in Supabase:', error);
-              else console.log('[v0] Rent record updated in Supabase');
             });
           } catch (error) {
             console.error('[v0] Error syncing rent record to Supabase:', error);
@@ -1466,15 +1480,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           
           return {
             ...r,
-            paid: newPaid,
+            paid: totalPaid,
             balance: newBalance,
             carryForward: newBalance,
           };
         }
         return r;
-      })
-    );
-  }, []);
+      });
+    });
+  }, [payments]);
 
   const generateRentSheet = useCallback(async (monthYear: string) => {
     const activeTenants = tenants.filter((t) => t.status === 'active');
