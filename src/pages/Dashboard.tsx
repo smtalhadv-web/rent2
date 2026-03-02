@@ -18,7 +18,7 @@ export function Dashboard() {
 
     const currentRecords = rentRecords.filter(r => r.monthYear === currentMonthYear);
     const totalPaidThisMonth = currentRecords.reduce((sum, r) => sum + r.paid, 0);
-    const totalOutstanding = currentRecords.reduce((sum, r) => sum + r.balance, 0);
+    const totalOutstanding = currentRecords.reduce((sum, r) => sum + r.outstandingPrevious, 0);
 
     const expiringLeases = leases.filter(l => {
       if (l.status === 'expired') return false;
