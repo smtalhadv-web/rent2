@@ -180,13 +180,13 @@ export function RentSheet() {
     const data = getRentData(selectedTenantId, paymentMonth);
     const totalDue = data.rent + data.outstanding - data.paid;
     
-    return { 
-      rent: data.rent, 
-      outstanding: data.outstanding, 
-      totalDue: totalDue > 0 ? totalDue : 0, 
-      previousPaid: data.paid 
-    };
-  }
+  return {
+    rent: data.rent,
+    outstanding: data.outstanding,
+    totalDue: totalDue > 0 ? totalDue : 0,
+    previousPaid: data.paid
+  };
+}
 
   // Submit Payment
   function submitPayment(e: React.FormEvent) {
