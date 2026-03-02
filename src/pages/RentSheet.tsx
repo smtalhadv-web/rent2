@@ -107,6 +107,12 @@ export function RentSheet() {
     return totalPaid;
   }
 
+  // Get selected tenant
+  function getSelectedTenant() {
+    if (!selectedTenantId || !tenants) return null;
+    return tenants.find(t => t.id === selectedTenantId);
+  }
+
   // Get rent data - uses rent records if available, otherwise calculates dynamically
   function getRentData(tenantId: string, monthYear?: string) {
     const month = monthYear || selectedMonth;
