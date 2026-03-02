@@ -130,104 +130,29 @@ export function RentSheet() {
       }
     }
     
-    if (rentRecord) {
-      // Use rent from the record (which is the monthlyRent at that time)
-      return {
-        rent: rentRecord.rent || rent,
-        outstanding: rentRecord.outstandingPrevious || 0,
-        paid: rentRecord.paid || 0,
-        balance: rentRecord.balance || 0
-      };
-    }
+  if (rentRecord) {
+  // Use rent from the record (which is the monthlyRent at that time)
+  return {
+  rent: rentRecord.rent || rent,
+  outstanding: rentRecord.outstandingPrevious || 0,
+  paid: rentRecord.paid || 0,
+  balance: rentRecord.carryForward || rentRecord.balance || 0,
+  carryForward: rentRecord.carryForward || rentRecord.balance || 0
+  };
+  }
     
-    // Calculate dynamically if no rent record exists
-    const outstanding = getOutstandingForMonth(tenantId, month);
-    const paid = getPaidForMonth(tenantId, month);
-    const balance = rent + outstanding - paid;
-    
-    return { rent, outstanding, paid, balance };
-  }
-
-  // Filter tenants
-  let filteredTenants: typeof tenants = [];
-  if (tenants && tenants.length > 0) {
-    for (let i = 0; i < tenants.length; i++) {
-      const t = tenants[i];
-      if (!t) continue;
-      
-      if (filterStatus === 'active' && t.status !== 'active') continue;
-      if (filterStatus === 'vacated' && t.status !== 'vacated') continue;
-      
-      if (searchTerm) {
-        const search = searchTerm.toLowerCase();
-        const nameMatch = t.name && t.name.toLowerCase().indexOf(search) >= 0;
-        const premisesMatch = t.premises && t.premises.toLowerCase().indexOf(search) >= 0;
-        if (!nameMatch && !premisesMatch) continue;
-      }
-      
-      filteredTenants.push(t);
-    }
-  }
-
-  // Get rent record (keeping for backward compatibility)
-  function getRentRecord(tenantId: string, month?: string) {
-    const m = month || selectedMonth;
-    if (!rentRecords || rentRecords.length === 0) return null;
-    for (let j = 0; j < rentRecords.length; j++) {
-      if (rentRecords[j] && rentRecords[j].tenantId === tenantId && rentRecords[j].monthYear === m) {
-        return rentRecords[j];
-      }
-    }
-    return null;
-  }
-
-  // Get lease for tenant
-  function getLease(tenantId: string) {
-    if (!leases || leases.length === 0) return null;
-    for (let k = 0; k < leases.length; k++) {
-      if (leases[k] && leases[k].tenantId === tenantId) {
-        return leases[k];
-      }
-    }
-    return null;
-  }
-
-  // Get selected tenant
-  function getSelectedTenant() {
-    if (!selectedTenantId || !tenants) return null;
-    for (let m = 0; m < tenants.length; m++) {
-      if (tenants[m] && tenants[m].id === selectedTenantId) {
-        return tenants[m];
-      }
-    }
-    return null;
-  }
-
-  // Calculate totals using getRentData
-  let totalRent = 0;
-  let totalOutstanding = 0;
-  let totalPaid = 0;
-  let totalBalance = 0;
-
-  for (let n = 0; n < filteredTenants.length; n++) {
-    const tenant = filteredTenants[n];
-    const data = getRentData(tenant.id);
-    
-    totalRent += data.rent;
-    totalOutstanding += data.outstanding;
-    totalPaid += data.paid;
-    totalBalance += data.balance;
-  }
-
-  // Handle file upload
-  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files && e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = function() {
-        setPaymentAttachment(reader.result as string);
-        setPaymentAttachmentName(file.name);
-      };
+  // Calculate dynamically if no rent record exists
+  const outstanding = getOutstandingForMonth(tenantId, month);
+  const paid = getPaidForMonth(tenantId, month);
+  const balance = rent + outstanding - paid;
+  
+  return {
+  rent,
+  outstanding,
+  paid,
+  balance,
+  carryForward: balance
+  };
       reader.readAsDataURL(file);
     }
   }
@@ -646,6 +571,32 @@ export function RentSheet() {
   // Get payment details for display
   const paymentDetails = getPaymentDetails();
 
+  // Calculate filtered tenants and totals
+  const filteredTenants = (tenants || []).filter(t => {
+    const matchStatus = filterStatus === 'all' || t.status === filterStatus;
+    const matchSearch = !searchTerm || 
+      (t.name && t.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.premises && t.premises.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (t.phone && t.phone.includes(searchTerm));
+    return matchStatus && matchSearch;
+  });
+
+  // Calculate totals using carryForward values
+  let totalRent = 0;
+  let totalOutstanding = 0;
+  let totalPaid = 0;
+  let totalBalance = 0;
+
+  for (let n = 0; n < filteredTenants.length; n++) {
+    const tenant = filteredTenants[n];
+    const data = getRentData(tenant.id);
+    
+    totalRent += data.rent;
+    totalOutstanding += data.outstanding;
+    totalPaid += data.paid;
+    totalBalance += (data.carryForward || data.balance);
+  }
+
   return (
     <Layout>
       <div className="p-4 md:p-6">
@@ -710,9 +661,9 @@ export function RentSheet() {
                   <th className="p-2 text-left">Tenant</th>
                   <th className="p-2 text-left">Shop</th>
                   <th className="p-2 text-right">Rent</th>
-                  <th className="p-2 text-right">Outstanding</th>
+                  <th className="p-2 text-right">Outstanding Previous</th>
                   <th className="p-2 text-right">Paid</th>
-                  <th className="p-2 text-right">Balance</th>
+                  <th className="p-2 text-right">Carry Forward</th>
                   <th className="p-2 text-center">Lease</th>
                   <th className="p-2 text-center">Actions</th>
                 </tr>
@@ -721,7 +672,8 @@ export function RentSheet() {
                 {filteredTenants.length > 0 ? filteredTenants.map((tenant, idx) => {
                   const data = getRentData(tenant.id);
                   const leaseStatus = getLeaseStatus(tenant.id);
-                  const balanceColor = data.balance > 0 ? 'text-red-600' : data.balance < 0 ? 'text-green-600' : '';
+                  const carryForwardAmount = data.carryForward || data.balance;
+                  const balanceColor = carryForwardAmount > 0 ? 'text-red-600' : carryForwardAmount < 0 ? 'text-green-600' : '';
                   
                   return (
                     <tr key={tenant.id} className="border-b hover:bg-gray-50">
@@ -731,7 +683,7 @@ export function RentSheet() {
                       <td className="p-2 text-right">{formatNum(data.rent)}</td>
                       <td className="p-2 text-right text-orange-600">{formatNum(data.outstanding)}</td>
                       <td className="p-2 text-right text-green-600">{formatNum(data.paid)}</td>
-                      <td className={'p-2 text-right font-bold ' + balanceColor}>{formatNum(data.balance)}</td>
+                      <td className={'p-2 text-right font-bold ' + balanceColor}>{formatNum(carryForwardAmount)}</td>
                       <td className="p-2 text-center">
                         <span className={'px-2 py-0.5 rounded text-xs ' + leaseStatus.color}>{leaseStatus.text}</span>
                       </td>
