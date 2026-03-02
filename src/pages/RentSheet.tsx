@@ -11,6 +11,10 @@ export function RentSheet() {
     return now.toISOString().slice(0, 7);
   });
 
+  // Debug: Log rent records to check if data is loaded
+  console.log('[v0] RentSheet - rentRecords count:', rentRecords?.length || 0);
+  console.log('[v0] RentSheet - sample rent record:', rentRecords?.[0]);
+
   // Format number with commas and 0 decimals
   const formatNum = (num: number) => {
     return (num || 0).toLocaleString('en-PK', {
