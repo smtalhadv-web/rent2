@@ -130,29 +130,29 @@ export function RentSheet() {
       }
     }
     
-  if (rentRecord) {
-  // Use rent from the record (which is the monthlyRent at that time)
-  return {
-  rent: rentRecord.rent || rent,
-  outstanding: rentRecord.outstandingPrevious || 0,
-  paid: rentRecord.paid || 0,
-  balance: rentRecord.carryForward || rentRecord.balance || 0,
-  carryForward: rentRecord.carryForward || rentRecord.balance || 0
-  };
-  }
+    if (rentRecord) {
+      // Use rent from the record (which is the monthlyRent at that time)
+      return {
+        rent: rentRecord.rent || rent,
+        outstanding: rentRecord.outstandingPrevious || 0,
+        paid: rentRecord.paid || 0,
+        balance: rentRecord.carryForward || rentRecord.balance || 0,
+        carryForward: rentRecord.carryForward || rentRecord.balance || 0
+      };
+    }
     
-  // Calculate dynamically if no rent record exists
-  const outstanding = getOutstandingForMonth(tenantId, month);
-  const paid = getPaidForMonth(tenantId, month);
-  const balance = rent + outstanding - paid;
-  
-  return {
-    rent,
-    outstanding,
-    paid,
-    balance,
-    carryForward: balance
-  };
+    // Calculate dynamically if no rent record exists
+    const outstanding = getOutstandingForMonth(tenantId, month);
+    const paid = getPaidForMonth(tenantId, month);
+    const balance = rent + outstanding - paid;
+    
+    return {
+      rent,
+      outstanding,
+      paid,
+      balance,
+      carryForward: balance
+    };
   }
 
   // Open Payment Modal
