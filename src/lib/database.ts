@@ -118,9 +118,14 @@ export async function saveDatabaseConnection(
           createdAt: new Date().toISOString(),
         };
         
+        console.log('[v0] saveDatabaseConnection: Creating new connection with ID:', newConnection.id, 'Name:', newConnection.name);
         const existing = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+        console.log('[v0] saveDatabaseConnection: Current connections in localStorage:', existing.length);
         existing.push(newConnection);
+        console.log('[v0] saveDatabaseConnection: Total after push:', existing.length);
         localStorage.setItem('databaseConnections', JSON.stringify(existing));
+        const verify = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+        console.log('[v0] saveDatabaseConnection: Verification - localStorage now has:', verify.length, 'connections');
         
         console.log('[v0] Connection saved to localStorage');
         return {
@@ -174,9 +179,12 @@ export async function saveDatabaseConnection(
         createdAt: new Date().toISOString(),
       };
       
+      console.log('[v0] saveDatabaseConnection (final fallback): Creating connection with ID:', newConnection.id);
       const existing = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+      console.log('[v0] saveDatabaseConnection (final fallback): Current:', existing.length);
       existing.push(newConnection);
       localStorage.setItem('databaseConnections', JSON.stringify(existing));
+      console.log('[v0] saveDatabaseConnection (final fallback): Saved, total now:', existing.length);
       
       return {
         success: true,
@@ -185,6 +193,7 @@ export async function saveDatabaseConnection(
         connection: newConnection,
       };
     } catch (localError) {
+      console.error('[v0] saveDatabaseConnection (final fallback): Error:', localError);
       return {
         success: false,
         message: `Unexpected error: ${(error as any).message || 'Unknown error'}`,

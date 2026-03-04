@@ -1732,7 +1732,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const addDatabaseConnection = useCallback(async (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>): Promise<boolean> => {
     try {
+      console.log('[v0] addDatabaseConnection: Saving connection:', connection.name);
       const result = await saveDatabaseConnection(connection);
+      console.log('[v0] addDatabaseConnection: Save result:', result);
       
       if (!result.success) {
         console.error('[v0] Error adding connection:', result.message);
@@ -1741,11 +1743,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // If we got the connection object back, add it directly to state
       if (result.connection) {
-        setDatabaseConnections(prev => [...prev, result.connection!]);
+        console.log('[v0] addDatabaseConnection: Adding connection object to state:', result.connection);
+        setDatabaseConnections(prev => {
+          const updated = [...prev, result.connection!];
+          console.log('[v0] addDatabaseConnection: New state with', updated.length, 'connections');
+          return updated;
+        });
         console.log('[v0] Connection added to state:', result.connection.name);
       } else {
         // Otherwise reload from storage
+        console.log('[v0] addDatabaseConnection: No connection object, reloading from storage');
         const updatedConnections = await getDatabaseConnections();
+        console.log('[v0] addDatabaseConnection: Reloaded', updatedConnections.length, 'connections');
         setDatabaseConnections(updatedConnections);
         console.log('[v0] Reloaded connections after add');
       }
