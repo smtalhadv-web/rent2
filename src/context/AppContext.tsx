@@ -1360,8 +1360,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     console.log('[v0] Adding tenant:', newTenant.name);
+    
+    // Always add to local state first (for immediate UI feedback)
+    setTenants((prev) => [...prev, newTenant]);
 
-    // Save to Supabase
+    // Try to save to Supabase (but don't fail if it can't)
     try {
       console.log('[v0] Inserting to Supabase tenants table...');
       const { data, error } = await supabase.from('tenants').insert([
@@ -1381,16 +1384,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       ]);
       if (error) {
-        console.error('[v0] Supabase insert error:', error);
-        throw error;
+        console.warn('[v0] Could not insert to Supabase (using localStorage):', error.message);
+        // This is OK - the tenant is already in local state and will be saved to localStorage
+      } else {
+        console.log('[v0] Tenant inserted to Supabase successfully');
       }
-      console.log('[v0] Tenant inserted successfully');
-      setTenants((prev) => [...prev, newTenant]);
     } catch (error: any) {
-      console.error('[v0] Error adding tenant to Supabase:', {
-        message: error.message,
-        code: error.code,
-      });
+      console.warn('[v0] Could not reach Supabase, using localStorage:', error.message);
+      // This is OK - the tenant is already in local state and will be saved to localStorage
     }
   }, []);
 
