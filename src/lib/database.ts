@@ -205,19 +205,28 @@ export async function getDatabaseConnections(): Promise<DatabaseConnection[]> {
       }
     }
 
-    const mappedData = data?.map((conn: any) => ({
-      id: conn.id,
-      name: conn.name,
-      type: conn.type,
-      host: conn.host,
-      port: conn.port,
-      database: conn.database,
-      username: conn.username,
-      createdAt: conn.created_at,
-    })) || [];
+    // Check if data exists from Supabase
+    if (data && data.length > 0) {
+      const mappedData = data.map((conn: any) => ({
+        id: conn.id,
+        name: conn.name,
+        type: conn.type,
+        host: conn.host,
+        port: conn.port,
+        database: conn.database,
+        username: conn.username,
+        createdAt: conn.created_at,
+      }));
+      
+      console.log('[v0] Loaded', mappedData.length, 'connections from Supabase');
+      return mappedData;
+    }
     
-    console.log('[v0] Loaded', mappedData.length, 'connections from Supabase');
-    return mappedData;
+    // If Supabase returned empty array, check localStorage for locally saved connections
+    console.log('[v0] Supabase returned empty, checking localStorage...');
+    const local = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+    console.log('[v0] Loaded', local.length, 'connections from localStorage');
+    return local;
   } catch (error) {
     console.error('[v0] Unexpected error fetching connections:', error);
     
