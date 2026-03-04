@@ -1097,6 +1097,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         
         console.log('[v0] Tenants loaded:', tenantsData?.length || 0);
         
+        // If Supabase has data, use it. Otherwise keep what's in localStorage/state
         if (tenantsData && tenantsData.length > 0) {
           const transformedTenants: Tenant[] = tenantsData.map((t: any) => ({
             id: t.id,
@@ -1117,13 +1118,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.log('[v0] Tenants state updated with', transformedTenants.length, 'records');
         }
 
-        // Load leases from Supabase
+        // Load leases from Supabase (if available, otherwise use localStorage)
         const { data: leasesData, error: leasesError } = await supabase
           .from('leases')
           .select('*')
-          .order('created_at', { ascending: true });
+          .order('start_date', { ascending: true });
 
         if (leasesError) throw leasesError;
+        // Only update state if Supabase has data (preserves localStorage data if Supabase is empty)
         if (leasesData && leasesData.length > 0) {
           const transformedLeases: Lease[] = leasesData.map((l: any) => ({
             id: l.id,
@@ -1139,13 +1141,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setLeases(transformedLeases);
         }
 
-        // Load payments from Supabase
+        // Load payments from Supabase (if available, otherwise use localStorage)
         const { data: paymentsData, error: paymentsError } = await supabase
           .from('payments')
           .select('*')
           .order('created_at', { ascending: false });
 
         if (paymentsError) throw paymentsError;
+        // Only update state if Supabase has data (preserves localStorage data if Supabase is empty)
         if (paymentsData && paymentsData.length > 0) {
           const transformedPayments: Payment[] = paymentsData.map((p: any) => ({
             id: p.id,
@@ -1161,13 +1164,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setPayments(transformedPayments);
         }
 
-        // Load rent records from Supabase
+        // Load rent records from Supabase (if available, otherwise use localStorage)
         const { data: rentRecordsData, error: rentRecordsError } = await supabase
           .from('rent_records')
           .select('*')
           .order('month_year', { ascending: false });
 
         if (rentRecordsError) throw rentRecordsError;
+        // Only update state if Supabase has data (preserves localStorage data if Supabase is empty)
         if (rentRecordsData && rentRecordsData.length > 0) {
           const transformedRecords: RentRecord[] = rentRecordsData.map((r: any) => ({
             id: r.id,
