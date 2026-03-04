@@ -78,7 +78,7 @@ export function validateConnectionString(connection: Omit<DatabaseConnection, 'i
  */
 export async function saveDatabaseConnection(
   connection: Omit<DatabaseConnection, 'id' | 'createdAt'>
-): Promise<{ success: boolean; message: string; connectionId?: string }> {
+): Promise<{ success: boolean; message: string; connectionId?: string; connection?: DatabaseConnection }> {
   try {
     // Validate connection first
     const validation = validateConnectionString(connection);
@@ -127,6 +127,7 @@ export async function saveDatabaseConnection(
           success: true,
           message: 'Connection saved locally (Supabase not available)',
           connectionId: newConnection.id,
+          connection: newConnection,
         };
       } catch (localError) {
         console.error('[v0] localStorage fallback error:', localError);
@@ -138,11 +139,23 @@ export async function saveDatabaseConnection(
     }
 
     if (data && data.length > 0) {
+      const savedConnection: DatabaseConnection = {
+        id: data[0].id,
+        name: data[0].name,
+        type: data[0].type,
+        host: data[0].host,
+        port: data[0].port,
+        database: data[0].database,
+        username: data[0].username,
+        createdAt: data[0].created_at,
+      };
+      
       console.log('[v0] Connection saved to Supabase');
       return {
         success: true,
         message: 'Database connection saved successfully',
         connectionId: data[0].id,
+        connection: savedConnection,
       };
     }
 
@@ -169,6 +182,7 @@ export async function saveDatabaseConnection(
         success: true,
         message: 'Connection saved locally',
         connectionId: newConnection.id,
+        connection: newConnection,
       };
     } catch (localError) {
       return {

@@ -1062,10 +1062,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>(() => {
-    const saved = localStorage.getItem('databaseConnections');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>([]);
 
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1253,21 +1250,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loadSupabaseData();
   }, []);
 
-  // Load database connections from Supabase
+  // Load database connections from localStorage on mount
   useEffect(() => {
     const loadConnections = async () => {
       try {
-        console.log('[v0] Loading database connections from Supabase...');
+        console.log('[v0] Loading database connections...');
         const connections = await getDatabaseConnections();
+        console.log('[v0] Loaded', connections.length, 'database connections');
         setDatabaseConnections(connections);
       } catch (error) {
         console.error('[v0] Error loading database connections:', error);
-        // Fall back to empty array if Supabase load fails
       }
     };
 
     loadConnections();
   }, []);
+
+  // Save database connections to localStorage whenever they change
+  useEffect(() => {
+    if (databaseConnections.length > 0 || localStorage.getItem('databaseConnections')) {
+      console.log('[v0] Saving', databaseConnections.length, 'database connections to localStorage');
+      localStorage.setItem('databaseConnections', JSON.stringify(databaseConnections));
+    }
+  }, [databaseConnections]);
 
   // Save tenants to Supabase
   useEffect(() => {
@@ -1718,13 +1723,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // Add the new connection directly to local state with a small delay to ensure localStorage is written
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Reload connections from storage
-      const updatedConnections = await getDatabaseConnections();
-      console.log('[v0] Updated connections after add:', updatedConnections.length);
-      setDatabaseConnections(updatedConnections);
+      // If we got the connection object back, add it directly to state
+      if (result.connection) {
+        setDatabaseConnections(prev => [...prev, result.connection!]);
+        console.log('[v0] Connection added to state:', result.connection.name);
+      } else {
+        // Otherwise reload from storage
+        const updatedConnections = await getDatabaseConnections();
+        setDatabaseConnections(updatedConnections);
+        console.log('[v0] Reloaded connections after add');
+      }
 
       console.log('[v0] Database connection added successfully:', connection.name);
       return true;
@@ -1732,7 +1740,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('[v0] Error adding database connection:', error);
       return false;
     }
-  }, [databaseConnections]);
+  }, []);
 
   const removeDatabaseConnection = useCallback(async (connectionId: string): Promise<boolean> => {
     try {
@@ -1743,13 +1751,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // Add a small delay to ensure localStorage is written
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Reload connections from storage
-      const updatedConnections = await getDatabaseConnections();
-      console.log('[v0] Updated connections after remove:', updatedConnections.length);
-      setDatabaseConnections(updatedConnections);
+      // Remove from local state immediately
+      setDatabaseConnections(prev => prev.filter(conn => conn.id !== connectionId));
+      console.log('[v0] Connection removed from state:', connectionId);
 
       console.log('[v0] Database connection removed:', connectionId);
       return true;
@@ -1757,7 +1761,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       console.error('[v0] Error removing database connection:', error);
       return false;
     }
-  }, [databaseConnections]);
+  }, []);
 
   const testDatabaseConnection = useCallback(async (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>): Promise<{ success: boolean; message: string }> => {
     try {
