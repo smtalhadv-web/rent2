@@ -1062,7 +1062,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>([]);
+  // Initialize databaseConnections from localStorage
+  const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>(() => {
+    try {
+      const saved = localStorage.getItem('databaseConnections');
+      console.log('[v0] Initial load from localStorage:', saved ? JSON.parse(saved).length : 0, 'connections');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('[v0] Error loading initial connections:', error);
+      return [];
+    }
+  });
 
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1173,28 +1183,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         // Load settings from Supabase
-        const { data: settingsData, error: settingsError } = await supabase
-          .from('settings')
-          .select('*')
-          .single();
+        try {
+          const { data: settingsData, error: settingsError } = await supabase
+            .from('settings')
+            .select('*')
+            .single();
 
-        if (!settingsError && settingsData) {
-          const transformedSettings: Settings = {
-            plazaName: settingsData.plaza_name,
-            address: settingsData.address || '',
-            phone: settingsData.phone || '',
-            logoUrl: settingsData.logo_url || '',
-            headerText: settingsData.header_text || '',
-            footerText: settingsData.footer_text || '',
-            termsConditions: settingsData.terms_conditions || '',
-            whatsappTemplate: settingsData.whatsapp_template || '',
-            defaultIncrementPercent: settingsData.default_increment_percent || 10,
-            autoApplyIncrement: settingsData.auto_apply_increment || false,
-            bankName: settingsData.bank_name || '',
-            accountTitle: settingsData.account_title || '',
-            accountNumber: settingsData.account_number || '',
-          };
-          setSettings(transformedSettings);
+          if (!settingsError && settingsData) {
+            const transformedSettings: Settings = {
+              plazaName: settingsData.plaza_name,
+              address: settingsData.address || '',
+              phone: settingsData.phone || '',
+              logoUrl: settingsData.logo_url || '',
+              headerText: settingsData.header_text || '',
+              footerText: settingsData.footer_text || '',
+              termsConditions: settingsData.terms_conditions || '',
+              whatsappTemplate: settingsData.whatsapp_template || '',
+              defaultIncrementPercent: settingsData.default_increment_percent || 10,
+              autoApplyIncrement: settingsData.auto_apply_increment || false,
+              bankName: settingsData.bank_name || '',
+              accountTitle: settingsData.account_title || '',
+              accountNumber: settingsData.account_number || '',
+            };
+            setSettings(transformedSettings);
+          } else {
+            console.log('[v0] Settings table not found or empty - using defaults');
+          }
+        } catch (settingsLoadError) {
+          console.warn('[v0] Could not load settings table (may not exist yet):', (settingsLoadError as any).message);
         }
 
         // Load rent history from Supabase
