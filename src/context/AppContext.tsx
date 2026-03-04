@@ -1403,26 +1403,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const updateData: any = {};
       if (updates.name !== undefined) updateData.name = updates.name;
-      if (updates.cnic !== undefined) updateData.cnic = updates.cnic && updates.cnic.trim() ? updates.cnic : null;
-      if (updates.phone !== undefined) updateData.phone = updates.phone && updates.phone.trim() ? updates.phone : null;
-      if (updates.email !== undefined) updateData.email = updates.email && updates.email.trim() ? updates.email : null;
+      if (updates.cnic !== undefined) updateData.cnic = updates.cnic && typeof updates.cnic === 'string' && updates.cnic.trim() ? updates.cnic : null;
+      if (updates.phone !== undefined) updateData.phone = updates.phone && typeof updates.phone === 'string' && updates.phone.trim() ? updates.phone : null;
+      if (updates.email !== undefined) updateData.email = updates.email && typeof updates.email === 'string' && updates.email.trim() ? updates.email : null;
       if (updates.premises !== undefined) updateData.premises = updates.premises;
-      if (updates.effectiveDate !== undefined) updateData.effective_date = updates.effectiveDate && updates.effectiveDate.trim() ? updates.effectiveDate : null;
-      if (updates.monthlyRent !== undefined) updateData.monthly_rent = updates.monthlyRent;
-      if (updates.securityDeposit !== undefined) updateData.security_deposit = updates.securityDeposit;
-      if (updates.depositAccountNo !== undefined) updateData.deposit_account_no = updates.depositAccountNo && updates.depositAccountNo.trim() ? updates.depositAccountNo : null;
-      if (updates.utilityNo !== undefined) updateData.utility_no = updates.utilityNo && updates.utilityNo.trim() ? updates.utilityNo : null;
+      if (updates.effectiveDate !== undefined) updateData.effective_date = updates.effectiveDate && typeof updates.effectiveDate === 'string' && updates.effectiveDate.trim() ? updates.effectiveDate : null;
+      if (updates.monthlyRent !== undefined) updateData.monthly_rent = typeof updates.monthlyRent === 'number' ? updates.monthlyRent : 0;
+      if (updates.securityDeposit !== undefined) updateData.security_deposit = typeof updates.securityDeposit === 'number' ? updates.securityDeposit : 0;
+      if (updates.depositAccountNo !== undefined) updateData.deposit_account_no = updates.depositAccountNo && typeof updates.depositAccountNo === 'string' && updates.depositAccountNo.trim() ? updates.depositAccountNo : null;
+      if (updates.utilityNo !== undefined) updateData.utility_no = updates.utilityNo && typeof updates.utilityNo === 'string' && updates.utilityNo.trim() ? updates.utilityNo : null;
       if (updates.status !== undefined) updateData.status = updates.status;
 
       if (Object.keys(updateData).length > 0) {
+        console.log('[v0] Updating tenant with data:', updateData);
         const { error } = await supabase
           .from('tenants')
           .update(updateData)
           .eq('id', id);
-        if (error) throw error;
+        
+        if (error) {
+          console.error('[v0] Supabase error details:', {
+            message: error.message,
+            code: error.code,
+            details: (error as any).details,
+          });
+          throw error;
+        }
+        console.log('[v0] Tenant updated successfully');
       }
     } catch (error) {
-      console.error('Error updating tenant in Supabase:', error);
+      console.error('[v0] Error updating tenant in Supabase:', error);
+      console.error('[v0] Full error object:', JSON.stringify(error, null, 2));
     }
   }, []);
 
