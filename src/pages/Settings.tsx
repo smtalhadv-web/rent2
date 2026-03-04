@@ -54,20 +54,53 @@ export function Settings() {
 
   async function handleAddConnection(e: React.FormEvent) {
     e.preventDefault();
-    const success = await addDatabaseConnection(connectionForm);
     
-    if (success) {
-      setConnectionForm({
-        name: '',
-        type: 'mysql',
-        host: '',
-        port: 3306,
-        database: '',
-        username: '',
-      });
-      setShowAddConnection(false);
-      setSaved(true);
-      setTimeout(function() { setSaved(false); }, 3000);
+    console.log('[v0] handleAddConnection called with:', connectionForm);
+    
+    // Validate form
+    if (!connectionForm.name.trim()) {
+      alert('Please enter a connection name');
+      return;
+    }
+    if (!connectionForm.database.trim()) {
+      alert('Please enter a database name');
+      return;
+    }
+    if (connectionForm.type !== 'sqlite') {
+      if (!connectionForm.host.trim()) {
+        alert('Please enter a host');
+        return;
+      }
+      if (!connectionForm.username.trim()) {
+        alert('Please enter a username');
+        return;
+      }
+    }
+    
+    try {
+      console.log('[v0] Calling addDatabaseConnection...');
+      const success = await addDatabaseConnection(connectionForm);
+      console.log('[v0] addDatabaseConnection returned:', success);
+      
+      if (success) {
+        console.log('[v0] Connection added successfully');
+        setConnectionForm({
+          name: '',
+          type: 'mysql',
+          host: '',
+          port: 3306,
+          database: '',
+          username: '',
+        });
+        setShowAddConnection(false);
+        setSaved(true);
+        setTimeout(function() { setSaved(false); }, 3000);
+      } else {
+        alert('Failed to add connection. Check console for details.');
+      }
+    } catch (error) {
+      console.error('[v0] Error in handleAddConnection:', error);
+      alert('Error: ' + (error as any).message);
     }
   }
 

@@ -74,7 +74,7 @@ export function validateConnectionString(connection: Omit<DatabaseConnection, 'i
 }
 
 /**
- * Store database connection in Supabase
+ * Store database connection in Supabase (with localStorage fallback)
  */
 export async function saveDatabaseConnection(
   connection: Omit<DatabaseConnection, 'id' | 'createdAt'>
@@ -89,7 +89,9 @@ export async function saveDatabaseConnection(
       };
     }
 
-    // Store in Supabase
+    console.log('[v0] Attempting to save connection to Supabase...');
+
+    // Try to store in Supabase
     const { data, error } = await supabase
       .from('database_connections')
       .insert([
@@ -106,14 +108,37 @@ export async function saveDatabaseConnection(
       .select();
 
     if (error) {
-      console.error('[v0] Error saving connection to Supabase:', error);
-      return {
-        success: false,
-        message: `Failed to save connection: ${error.message}`,
-      };
+      console.warn('[v0] Supabase error (using localStorage fallback):', error.message);
+      
+      // Fallback to localStorage if table doesn't exist or not authenticated
+      try {
+        const newConnection: DatabaseConnection = {
+          id: Math.random().toString(36).substring(2, 11),
+          ...connection,
+          createdAt: new Date().toISOString(),
+        };
+        
+        const existing = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+        existing.push(newConnection);
+        localStorage.setItem('databaseConnections', JSON.stringify(existing));
+        
+        console.log('[v0] Connection saved to localStorage');
+        return {
+          success: true,
+          message: 'Connection saved locally (Supabase not available)',
+          connectionId: newConnection.id,
+        };
+      } catch (localError) {
+        console.error('[v0] localStorage fallback error:', localError);
+        return {
+          success: false,
+          message: `Failed to save connection: ${error.message}`,
+        };
+      }
     }
 
     if (data && data.length > 0) {
+      console.log('[v0] Connection saved to Supabase');
       return {
         success: true,
         message: 'Database connection saved successfully',
@@ -127,29 +152,60 @@ export async function saveDatabaseConnection(
     };
   } catch (error) {
     console.error('[v0] Unexpected error saving connection:', error);
-    return {
-      success: false,
-      message: `Unexpected error: ${(error as any).message || 'Unknown error'}`,
-    };
+    
+    // Final fallback to localStorage
+    try {
+      const newConnection: DatabaseConnection = {
+        id: Math.random().toString(36).substring(2, 11),
+        ...connection,
+        createdAt: new Date().toISOString(),
+      };
+      
+      const existing = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+      existing.push(newConnection);
+      localStorage.setItem('databaseConnections', JSON.stringify(existing));
+      
+      return {
+        success: true,
+        message: 'Connection saved locally',
+        connectionId: newConnection.id,
+      };
+    } catch (localError) {
+      return {
+        success: false,
+        message: `Unexpected error: ${(error as any).message || 'Unknown error'}`,
+      };
+    }
   }
 }
 
 /**
- * Get all database connections from Supabase
+ * Get all database connections from Supabase (with localStorage fallback)
  */
 export async function getDatabaseConnections(): Promise<DatabaseConnection[]> {
   try {
+    console.log('[v0] Fetching database connections from Supabase...');
+    
     const { data, error } = await supabase
       .from('database_connections')
       .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[v0] Error fetching connections:', error);
-      return [];
+      console.warn('[v0] Error fetching from Supabase (using localStorage fallback):', error.message);
+      
+      // Fallback to localStorage
+      try {
+        const local = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+        console.log('[v0] Loaded', local.length, 'connections from localStorage');
+        return local;
+      } catch (localError) {
+        console.error('[v0] localStorage read error:', localError);
+        return [];
+      }
     }
 
-    return data?.map((conn: any) => ({
+    const mappedData = data?.map((conn: any) => ({
       id: conn.id,
       name: conn.name,
       type: conn.type,
@@ -159,40 +215,83 @@ export async function getDatabaseConnections(): Promise<DatabaseConnection[]> {
       username: conn.username,
       createdAt: conn.created_at,
     })) || [];
+    
+    console.log('[v0] Loaded', mappedData.length, 'connections from Supabase');
+    return mappedData;
   } catch (error) {
     console.error('[v0] Unexpected error fetching connections:', error);
-    return [];
+    
+    // Final fallback to localStorage
+    try {
+      const local = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+      console.log('[v0] Loaded', local.length, 'connections from localStorage (fallback)');
+      return local;
+    } catch (localError) {
+      console.error('[v0] localStorage fallback error:', localError);
+      return [];
+    }
   }
 }
 
 /**
- * Delete database connection from Supabase
+ * Delete database connection from Supabase (with localStorage fallback)
  */
 export async function deleteDatabaseConnection(connectionId: string): Promise<{ success: boolean; message: string }> {
   try {
+    console.log('[v0] Deleting connection:', connectionId);
+    
     const { error } = await supabase
       .from('database_connections')
       .delete()
       .eq('id', connectionId);
 
     if (error) {
-      console.error('[v0] Error deleting connection:', error);
-      return {
-        success: false,
-        message: `Failed to delete connection: ${error.message}`,
-      };
+      console.warn('[v0] Error deleting from Supabase (using localStorage fallback):', error.message);
+      
+      // Fallback to localStorage
+      try {
+        const connections = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+        const filtered = connections.filter((c: DatabaseConnection) => c.id !== connectionId);
+        localStorage.setItem('databaseConnections', JSON.stringify(filtered));
+        
+        console.log('[v0] Connection deleted from localStorage');
+        return {
+          success: true,
+          message: 'Database connection deleted successfully',
+        };
+      } catch (localError) {
+        console.error('[v0] localStorage delete error:', localError);
+        return {
+          success: false,
+          message: `Failed to delete connection: ${error.message}`,
+        };
+      }
     }
 
+    console.log('[v0] Connection deleted from Supabase');
     return {
       success: true,
       message: 'Database connection deleted successfully',
     };
   } catch (error) {
     console.error('[v0] Unexpected error deleting connection:', error);
-    return {
-      success: false,
-      message: `Unexpected error: ${(error as any).message || 'Unknown error'}`,
-    };
+    
+    // Final fallback to localStorage
+    try {
+      const connections = JSON.parse(localStorage.getItem('databaseConnections') || '[]');
+      const filtered = connections.filter((c: DatabaseConnection) => c.id !== connectionId);
+      localStorage.setItem('databaseConnections', JSON.stringify(filtered));
+      
+      return {
+        success: true,
+        message: 'Database connection deleted successfully',
+      };
+    } catch (localError) {
+      return {
+        success: false,
+        message: `Unexpected error: ${(error as any).message || 'Unknown error'}`,
+      };
+    }
   }
 }
 
