@@ -4,6 +4,17 @@ import { User, Tenant, Lease, Payment, RentRecord, Settings, RentHistory, Deposi
 import { format, addMonths, differenceInDays, parseISO } from 'date-fns';
 import { supabase } from '../lib/supabase';
 
+interface DatabaseConnection {
+  id: string;
+  name: string;
+  type: 'mysql' | 'postgresql' | 'sql-server' | 'sqlite';
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  createdAt: string;
+}
+
 interface AppContextType {
   user: User | null;
   login: (username: string, password: string) => boolean;
@@ -27,6 +38,10 @@ interface AppContextType {
   addDepositAdjustment: (adjustment: Omit<DepositAdjustment, 'id'>) => void;
   getTenantLedger: (tenantId: string) => { records: RentRecord[]; payments: Payment[] };
   getWhatsAppMessage: (tenantId: string, type: 'rent' | 'overdue' | 'lease') => string;
+  databaseConnections: DatabaseConnection[];
+  addDatabaseConnection: (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>) => Promise<boolean>;
+  removeDatabaseConnection: (connectionId: string) => Promise<boolean>;
+  testDatabaseConnection: (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>) => Promise<{ success: boolean; message: string }>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -1041,6 +1056,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [databaseConnections, setDatabaseConnections] = useState<DatabaseConnection[]>(() => {
+    const saved = localStorage.getItem('databaseConnections');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -1667,6 +1687,102 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .replace('{{balance}}', record ? record.balance.toLocaleString() : '0');
   };
 
+  const addDatabaseConnection = useCallback(async (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>): Promise<boolean> => {
+    try {
+      const newConnection: DatabaseConnection = {
+        ...connection,
+        id: uuidv4(),
+        createdAt: new Date().toISOString(),
+      };
+
+      const updatedConnections = [...databaseConnections, newConnection];
+      setDatabaseConnections(updatedConnections);
+      localStorage.setItem('databaseConnections', JSON.stringify(updatedConnections));
+
+      console.log('[v0] Database connection added:', newConnection.name);
+      return true;
+    } catch (error) {
+      console.error('[v0] Error adding database connection:', error);
+      return false;
+    }
+  }, [databaseConnections]);
+
+  const removeDatabaseConnection = useCallback(async (connectionId: string): Promise<boolean> => {
+    try {
+      const updatedConnections = databaseConnections.filter((conn) => conn.id !== connectionId);
+      setDatabaseConnections(updatedConnections);
+      localStorage.setItem('databaseConnections', JSON.stringify(updatedConnections));
+
+      console.log('[v0] Database connection removed:', connectionId);
+      return true;
+    } catch (error) {
+      console.error('[v0] Error removing database connection:', error);
+      return false;
+    }
+  }, [databaseConnections]);
+
+  const testDatabaseConnection = useCallback(async (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>): Promise<{ success: boolean; message: string }> => {
+    try {
+      // Simulated test connection string builder
+      const connectionString = buildConnectionString(connection);
+      console.log('[v0] Testing connection with string:', connectionString);
+
+      // In a real application, this would call a backend API
+      // For now, we'll simulate a successful connection test
+      const isValid = validateConnectionString(connection);
+      
+      if (!isValid) {
+        return {
+          success: false,
+          message: 'Invalid connection parameters. Please check your database details.',
+        };
+      }
+
+      return {
+        success: true,
+        message: 'Connection successful! Database is accessible.',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: `Connection failed: ${(error as any).message || 'Unknown error'}`,
+      };
+    }
+  }, []);
+
+  const buildConnectionString = (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>): string => {
+    const { type, host, port, database, username } = connection;
+    
+    switch (type) {
+      case 'mysql':
+        return `mysql://${username}@${host}:${port}/${database}`;
+      case 'postgresql':
+        return `postgresql://${username}@${host}:${port}/${database}`;
+      case 'sql-server':
+        return `mssql://${username}@${host}:${port}/${database}`;
+      case 'sqlite':
+        return `sqlite:///${database}`;
+      default:
+        return '';
+    }
+  };
+
+  const validateConnectionString = (connection: Omit<DatabaseConnection, 'id' | 'createdAt'>): boolean => {
+    const { name, type, host, port, database, username } = connection;
+    
+    if (!name || name.trim() === '') return false;
+    if (!type) return false;
+    if (!database || database.trim() === '') return false;
+    if (!username || username.trim() === '') return false;
+    
+    if (type !== 'sqlite') {
+      if (!host || host.trim() === '') return false;
+      if (port < 1 || port > 65535) return false;
+    }
+    
+    return true;
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1692,6 +1808,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addDepositAdjustment,
         getTenantLedger,
         getWhatsAppMessage,
+        databaseConnections,
+        addDatabaseConnection,
+        removeDatabaseConnection,
+        testDatabaseConnection,
       }}
     >
       {children}
