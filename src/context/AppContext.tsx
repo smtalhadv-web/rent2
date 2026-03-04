@@ -1041,10 +1041,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [supabaseError, setSupabaseError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
   // Load data from Supabase on mount
   useEffect(() => {
     const loadSupabaseData = async () => {
       try {
+        setIsLoading(true);
+        setSupabaseError(null);
         // Load tenants from Supabase
         console.log('[v0] Loading tenants from Supabase...');
         const { data: tenantsData, error: tenantsError } = await supabase
@@ -1213,6 +1218,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           details: (error as any).details,
         });
         // Fall back to existing state if Supabase load fails
+        setSupabaseError((error as any).message || 'Failed to load data from database');
+      } finally {
+        setIsLoading(false);
       }
     };
 

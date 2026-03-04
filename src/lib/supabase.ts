@@ -1,11 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Get Supabase credentials from environment variables
-// Vite exposes NEXT_PUBLIC_ prefixed variables without the prefix
-const supabaseUrl = (import.meta.env as any).NEXT_PUBLIC_SUPABASE_URL || 
-                    import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta.env as any).NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-                        import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Vite requires VITE_ prefix for public variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 console.log('[v0] Initializing Supabase');
 console.log('[v0] URL available:', !!supabaseUrl);
