@@ -1399,6 +1399,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
 
+    // Only try to update in Supabase if ID is a valid UUID (not numeric sample data)
+    const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    
+    if (!isValidUUID) {
+      console.log('[v0] Skipping Supabase update for non-UUID tenant ID:', id);
+      return;
+    }
+
     // Update in Supabase
     try {
       const updateData: any = {};
